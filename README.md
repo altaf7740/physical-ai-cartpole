@@ -28,7 +28,10 @@ scripts/
   isaacsim_play.py         plain Isaac Sim player (`make run-sim`): policy + DC motor on Isaac Sim's physics steps
   viewer_ui.py             signal panel + keyboard taps (Kit UI only; used by play.py and isaacsim_play.py)
 pi/
-  run_policy.py            standalone 60 Hz inference stub for the Raspberry Pi (torch only)
+  run_policy.py            60 Hz controller for the Raspberry Pi (torch + stdlib); --web serves the live page
+  web_server.py            the page's server: Server-Sent Events + control commands (stdlib only)
+  web_ui.html              the live page (self-contained, works without internet)
+  fake_rig.py              simulated rig for testing without hardware (--fake)
 ```
 
 ## Setup (once)
@@ -48,6 +51,7 @@ C:\isaac\IsaacLab\isaaclab.bat -p -m pip install -e C:\Users\Admin\Desktop\rnd\c
 | `make train` | train headless (600 iterations, about 7 min) |
 | `make play` | headless: export `policy.pt` / `.onnx` / `policy_io.json` and print statistics |
 | `make eval` | stress test, 4096 episodes (`PUSH=0` no taps, `PUSH=2` twice as hard) |
+| `make pi-demo` | the Pi controller and its live web page on this PC, with a simulated rig: open http://localhost:8000 (`PORT=...`) |
 | `make help` | list the targets |
 
 Options: `ENVS=4` sets how many rigs are shown and `CKPT=logs\...\model_599.pt` picks a checkpoint (default:
@@ -183,8 +187,35 @@ to reach an observation-term instance from an event.
 1. Edit `src/cartpole_rig/rig_cfg.py`: masses, `pole_com`, `pole_length`, motor constants, `motor_inertia`,
    friction, delays and noise. The USD regenerates automatically on the next run.
 2. Retrain, run `play.py`, and copy `exported\policy.pt` and `exported\policy_io.json` to the Pi.
-3. On the Pi: `python run_policy.py --policy policy.pt --io policy_io.json`. Fill in the encoder constants
-   and the serial I/O in the two stub functions first.
+3. On the Pi: `python run_policy.py --policy policy.pt --io policy_io.json --web`. Fill in the encoder
+   constants and the serial I/O in the two stub functions first.
+
+## Live web page from the Pi
+
+`run_policy.py --web` serves a page at `http://<pi-address>:8000` that any phone or laptop on the same network
+can open. It shows the real rig live, drawn from the encoder readings:
+- cart position / velocity and pole angle / angular velocity as the policy gets them, the policy output
+  (PWM duty) and the motor voltage
+- 10 s plots, loop health (actual period and jitter against the 16.7 ms target, compute time) and a fall count
+- **Start**, **Stop**, **Reset** and **E-STOP** (Esc key)
+
+The controller starts idle with the motor off. Hold the pole upright and press Start; if the pole or cart leaves
+the trained envelope it trips (motor off) until you start it again. E-STOP latches until Reset. The page cannot
+push the motor: real disturbances are your hand.
+
+Safety: the 60 Hz loop never waits for the network (the server only reads a copy of the latest values), but the
+web E-STOP still depends on Wi-Fi, so keep a physical emergency stop on the rig. The page has no password: keep
+it on your local network.
+
+Without hardware: `make pi-demo` runs the same controller and page on this PC against `pi/fake_rig.py`, which
+produces encoder counts like the real encoders (pendulum 0 = hanging), so the whole Pi pipeline is exercised.
+There, Reset stands the simulated pole up and holds it, like a hand, until Start, and the rig gets a random
+tap every few seconds. It needs the `rig` section in `policy_io.json`, which `make play` writes.
+
+Velocity from encoder counts: the Pi differentiates counts at 60 Hz, so one count of a 2400-count pendulum
+encoder is a 0.16 rad/s step in angular velocity. That is noisier than the policy saw in training and shows as
+a chattering PWM duty (visible in `make pi-demo`). Use a higher-resolution encoder or 4x quadrature decoding,
+add a light velocity filter, or raise the angular-velocity noise in `obs_noise_std` and retrain.
 
 Simple ways to measure the motor (needs no current sensor): Ke = V / omega_no_load. R = V / I_stall (measure
 the current with the motor shaft held). Kt = Ke in SI units. For cart friction, apply a constant duty, log the

@@ -9,6 +9,7 @@ TorchScript policy (the same file the Pi loads) and prints episode statistics.
 """
 
 import argparse
+import dataclasses
 import importlib.metadata as metadata
 import json
 import os
@@ -56,6 +57,8 @@ def policy_io(rig) -> dict:
         "trained_obs_delay_steps": list(rig.obs_delay_steps),
         "trained_action_delay_steps": list(rig.action_delay_steps),
         "trained_obs_noise_std": list(rig.obs_noise_std),
+        # all rig parameters (used by pi/fake_rig.py to simulate the rig for testing the Pi page)
+        "rig": dataclasses.asdict(rig),
     }
 
 
