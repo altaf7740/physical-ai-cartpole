@@ -40,6 +40,32 @@ from cartpole_rig import mdp  # noqa: E402
 from cartpole_rig.rig_cfg import RIG  # noqa: E402
 
 
+def export_pi_onnx(src: str, dst: str, jit_path: str, opset: int = 13, ir_version: int = 7) -> float:
+    """Rewrite RSL-RL's policy.onnx (weights in a separate .data file, opset 18) as one self-contained file in
+    an older format that any ONNX runtime from ~2020 on loads (onnxruntime on the Pi, OpenCV DNN, ...). The
+    network only uses Gemm and Elu, so nothing changes. Returns the max |difference| to policy.pt on random
+    inputs (checked with onnx's reference evaluator)."""
+    import numpy as np
+    import onnx
+    from onnx import reference, version_converter
+
+    model = onnx.load(src)  # also loads the external .data weights
+    model = version_converter.convert_version(model, opset)
+    model.ir_version = ir_version
+    onnx.checker.check_model(model, full_check=True)
+    onnx.save_model(model, dst, save_as_external_data=False)
+
+    jit = torch.jit.load(jit_path, map_location="cpu").eval()
+    sess = reference.ReferenceEvaluator(dst)
+    worst = 0.0
+    for obs in np.random.default_rng(0).uniform(-1.5, 1.5, size=(64, 1, 4)).astype(np.float32):
+        (onnx_out,) = sess.run(None, {"obs": obs})
+        with torch.inference_mode():
+            jit_out = jit(torch.from_numpy(obs)).numpy()
+        worst = max(worst, float(np.abs(onnx_out - jit_out).max()))
+    return worst
+
+
 def policy_io(rig) -> dict:
     """Everything the Pi needs to build the policy input and use its output."""
     return {
@@ -89,9 +115,13 @@ def main():
         out_dir = os.path.join(os.path.dirname(ckpt), "exported")
         runner.export_policy_to_jit(path=out_dir, filename="policy.pt")
         runner.export_policy_to_onnx(path=out_dir, filename="policy.onnx")
+        pi_diff = export_pi_onnx(
+            os.path.join(out_dir, "policy.onnx"), os.path.join(out_dir, "policy_pi.onnx"), os.path.join(out_dir, "policy.pt")
+        )
         with open(os.path.join(out_dir, "policy_io.json"), "w") as f:
             json.dump(policy_io(RIG), f, indent=2)
-        print(f"[INFO] exported policy.pt, policy.onnx, policy_io.json to {out_dir}")
+        print(f"[INFO] exported policy.pt, policy.onnx, policy_pi.onnx, policy_io.json to {out_dir}")
+        print(f"[INFO] policy_pi.onnx (single file, opset 13, IR 7) vs policy.pt max |diff|: {pi_diff:.2e}")
 
         # run the exported TorchScript file, not the in-memory model
         policy = torch.jit.load(os.path.join(out_dir, "policy.pt"), map_location=env.unwrapped.device).eval()

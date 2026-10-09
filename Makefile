@@ -2,6 +2,7 @@
 #   make            open the viewer: trained policy + signal panel + keyboard taps
 #   make run-sim    same rig in the plain Isaac Sim app (no Isaac Lab), keyboard taps, R = reset
 #   make pi-demo    the Pi controller + its live web page on this PC, with a simulated rig
+#   make policy     copy the newest exported policy into policy/ (committed to git, used by install-pi.sh)
 #   make help       list all targets
 # Variables: ISAACLAB (Isaac Lab folder), ENVS (rigs shown), CKPT (checkpoint, default = latest run),
 #   PUSH (tap strength for eval), POLICY (exported policy.pt for `make run-sim`, default = newest),
@@ -20,7 +21,7 @@ CKPT_ARG := $(if $(CKPT),--checkpoint $(CKPT),)
 # newest exported policy folder (written by `make play`)
 EXPORTED := $(lastword $(sort $(wildcard logs/rsl_rl/cartpole_rig/*/exported)))
 
-.PHONY: run-lab run-lab-random run-sim pi-demo help install train play eval
+.PHONY: run-lab run-lab-random run-sim pi-demo policy help install train play eval
 
 run-lab: ## viewer with signal panel; LEFT/RIGHT tap the pole, A/D bump the cart, UP/DOWN strength
 	$(RUN) scripts\play.py --viz kit --num_envs $(ENVS) --steps 0 --real-time --keyboard $(CKPT_ARG)
@@ -33,6 +34,14 @@ run-sim: ## plain Isaac Sim app (no Isaac Lab): nominal rig + exported policy.pt
 
 pi-demo: ## Pi controller with web page (http://localhost:$(PORT)) and a simulated rig; Ctrl+C to stop
 	$(RUN) pi/run_policy.py --policy $(EXPORTED)/policy.pt --io $(EXPORTED)/policy_io.json --web --fake --port $(PORT)
+
+policy: ## copy the newest export (policy.pt, policy_pi.onnx, policy_io.json) into policy/ for git and the Pi
+	if not exist policy mkdir policy
+	copy /Y "$(subst /,\,$(EXPORTED))\policy.pt" policy
+	copy /Y "$(subst /,\,$(EXPORTED))\policy_pi.onnx" policy
+	copy /Y "$(subst /,\,$(EXPORTED))\policy_io.json" policy
+	echo $(EXPORTED)> policy\SOURCE.txt
+	@dir /B policy
 
 help: ## list targets
 	@findstr /R /C:"^[a-z-]*:.*##" Makefile

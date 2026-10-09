@@ -27,6 +27,8 @@ scripts/
   evaluate.py              stress test: one episode per env (4096), failure rate, margin, failures by parameter
   isaacsim_play.py         plain Isaac Sim player (`make run-sim`): policy + DC motor on Isaac Sim's physics steps
   viewer_ui.py             signal panel + keyboard taps (Kit UI only; used by play.py and isaacsim_play.py)
+policy/                    the current trained policy, committed to git (`make policy`):
+                           policy.pt, policy_pi.onnx, policy_io.json, SOURCE.txt (which run it came from)
 pi/
   run_policy.py            60 Hz controller for the Raspberry Pi (torch + stdlib); --web serves the live page
   web_server.py            the page's server: Server-Sent Events + control commands (stdlib only)
@@ -53,6 +55,7 @@ C:\isaac\IsaacLab\isaaclab.bat -p -m pip install -e C:\Users\Admin\Desktop\rnd\c
 | `make train` | train headless (600 iterations, about 7 min) |
 | `make play` | headless: export `policy.pt` / `.onnx` / `policy_io.json` and print statistics |
 | `make eval` | stress test, 4096 episodes (`PUSH=0` no taps, `PUSH=2` twice as hard) |
+| `make policy` | copy the newest export into `policy/` (commit it to publish a new policy; the Pi installs from there) |
 | `make pi-demo` | the Pi controller and its live web page on this PC, with a simulated rig: open http://localhost:8000 (`PORT=...`) |
 | `make help` | list the targets |
 
@@ -94,8 +97,12 @@ failure rate in the low / middle / high third of each randomized parameter. That
 policy is weak, for example "fails mostly when the motor is weak". Per-episode rows go to
 `<run>\eval_push<scale>.csv`.
 
-`play.py` writes `<run>\exported\policy.pt` (TorchScript), `policy.onnx` and `policy_io.json`. The ONNX
-weights are stored in a separate `policy.onnx.data` file next to it; copy both files together. It then runs
+`play.py` writes `<run>\exported\policy.pt` (TorchScript), `policy.onnx` and `policy_io.json`. RSL-RL's
+`policy.onnx` keeps its weights in a separate `policy.onnx.data` file and uses opset 18, so `play.py` also
+writes **`policy_pi.onnx`**: one self-contained file in opset 13 / IR 7, which any ONNX runtime from about 2020
+on loads (onnxruntime on the Pi, OpenCV DNN, ...). The network only uses Gemm and Elu, so the conversion
+changes nothing; `play.py` checks it against `policy.pt` (max difference about 1e-6). Input `obs` is
+float32 [1, 4], output `actions` is [1, 1]; the same scaling and clamping as `policy.pt` apply. It then runs
 the sim with the exported `policy.pt` file itself, so the file you copy to the Pi is the one that was tested.
 
 ## Policy interface (what the Pi must do)
@@ -188,7 +195,7 @@ to reach an observation-term instance from an event.
 
 1. Edit `src/cartpole_rig/rig_cfg.py`: masses, `pole_com`, `pole_length`, motor constants, `motor_inertia`,
    friction, delays and noise. The USD regenerates automatically on the next run.
-2. Retrain, run `play.py`, and copy `exported\policy.pt` and `exported\policy_io.json` to the Pi.
+2. Retrain, `make play`, `make policy`, commit and push; on the Pi `git pull` and `sudo ./install-pi.sh`.
 3. On the Pi: `python run_policy.py --policy policy.pt --io policy_io.json --web`. Fill in the encoder
    constants and the serial I/O in the two stub functions first.
 
@@ -198,19 +205,18 @@ Needs a Raspberry Pi 4 with **64-bit** Raspberry Pi OS (torch has no 32-bit whee
 first install.
 
 ```bash
-# on the training PC: copy the exported policy to the Pi
-scp -r logs/rsl_rl/cartpole_rig/<run>/exported pi@<pi-address>:~/exported
 # on the Pi
 git clone git@github.com:altaf7740/physical-ai-cartpole.git && cd physical-ai-cartpole/pi
-sudo ./install-pi.sh ~/exported
+sudo ./install-pi.sh                 # installs the policy committed in ../policy
 ```
+To install a policy that is not committed, pass its folder: `sudo ./install-pi.sh ~/exported`.
 
 The installer creates the system user `cartpole` (in group `dialout` for the Pico's serial port) and copies the
 controller files and the policy to `/opt/cartpole`. It creates a Python venv there with torch and pyserial,
 then installs and starts `cartpole.service`. Open `http://<pi-address>:8000`; the motor stays off until you press
 Start.
 
-- Update the code or the policy: `git pull`, then run `sudo ./install-pi.sh <exported-dir>` again.
+- Update the code or the policy: `git pull`, then run `sudo ./install-pi.sh` again.
 - Options: `/etc/default/cartpole` (`CARTPOLE_ARGS="--web"`; add `--fake` to test the Pi without the rig,
   `--port N` for another port), then `sudo systemctl restart cartpole`.
 - Logs: `journalctl -u cartpole -f`. Stop: `sudo systemctl stop cartpole`. Disable at boot:

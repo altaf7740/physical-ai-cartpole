@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Install (or update) the cart-pole controller on a Raspberry Pi 4 running 64-bit Raspberry Pi OS.
 #
-#   sudo ./install-pi.sh <exported-dir>
+#   sudo ./install-pi.sh                  # policy from the repo's policy/ folder (committed with `make policy`)
+#   sudo ./install-pi.sh <exported-dir>   # or from another folder with policy.pt and policy_io.json
 #
-# <exported-dir> holds policy.pt and policy_io.json (from `make play` on the training PC, folder
-# logs/rsl_rl/cartpole_rig/<run>/exported; copy it to the Pi first, e.g. with scp).
-# Re-run it any time to update the code or the policy; it restarts the service.
+# Re-run it any time (e.g. after `git pull`) to update the code or the policy; it restarts the service.
 #
 # What it does: installs python3-venv, creates the system user "cartpole" (in group dialout for the Pico's
 # serial port), copies this folder's controller files and the policy to /opt/cartpole, creates a venv there
@@ -20,9 +19,9 @@ FILES=(run_policy.py web_server.py web_ui.html fake_rig.py)
 
 die() { echo "error: $*" >&2; exit 1; }
 
-[[ $EUID -eq 0 ]] || die "run with sudo: sudo $0 <exported-dir>"
-[[ $# -eq 1 ]] || die "usage: sudo $0 <exported-dir>   (folder with policy.pt and policy_io.json)"
-EXPORTED="$(cd "$1" && pwd)" || die "no such folder: $1"
+[[ $EUID -eq 0 ]] || die "run with sudo: sudo $0 [exported-dir]"
+[[ $# -le 1 ]] || die "usage: sudo $0 [exported-dir]   (default: the repo's policy/ folder)"
+EXPORTED="$(cd "${1:-$SRC/../policy}" && pwd)" || die "no such folder: ${1:-$SRC/../policy}"
 for f in policy.pt policy_io.json; do [[ -f "$EXPORTED/$f" ]] || die "missing $EXPORTED/$f"; done
 for f in "${FILES[@]}" cartpole.service; do [[ -f "$SRC/$f" ]] || die "missing $SRC/$f (run from the repo's pi/ folder)"; done
 [[ "$(uname -m)" == "aarch64" ]] || die "needs 64-bit Raspberry Pi OS (aarch64) for torch; this is $(uname -m)"
@@ -43,6 +42,8 @@ install -d -m 755 "$APP"
 for f in "${FILES[@]}"; do install -m 644 "$SRC/$f" "$APP/$f"; done
 install -m 644 "$EXPORTED/policy.pt" "$APP/policy.pt"
 install -m 644 "$EXPORTED/policy_io.json" "$APP/policy_io.json"
+[[ -f "$EXPORTED/policy_pi.onnx" ]] && install -m 644 "$EXPORTED/policy_pi.onnx" "$APP/policy_pi.onnx"
+echo "    policy from $EXPORTED"
 
 echo "==> python venv (torch is large: the first install takes a few minutes)"
 [[ -x "$APP/venv/bin/python" ]] || python3 -m venv "$APP/venv"
