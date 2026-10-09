@@ -32,6 +32,8 @@ pi/
   web_server.py            the page's server: Server-Sent Events + control commands (stdlib only)
   web_ui.html              the live page (self-contained, works without internet)
   fake_rig.py              simulated rig for testing without hardware (--fake)
+  install-pi.sh            installs / updates the controller as a service on the Pi
+  cartpole.service         systemd unit (starts at boot, motor off until Start on the page)
 ```
 
 ## Setup (once)
@@ -189,6 +191,34 @@ to reach an observation-term instance from an event.
 2. Retrain, run `play.py`, and copy `exported\policy.pt` and `exported\policy_io.json` to the Pi.
 3. On the Pi: `python run_policy.py --policy policy.pt --io policy_io.json --web`. Fill in the encoder
    constants and the serial I/O in the two stub functions first.
+
+## Install on the Pi (runs at boot)
+
+Needs a Raspberry Pi 4 with **64-bit** Raspberry Pi OS (torch has no 32-bit wheels) and network access for the
+first install.
+
+```bash
+# on the training PC: copy the exported policy to the Pi
+scp -r logs/rsl_rl/cartpole_rig/<run>/exported pi@<pi-address>:~/exported
+# on the Pi
+git clone git@github.com:altaf7740/physical-ai-cartpole.git && cd physical-ai-cartpole/pi
+sudo ./install-pi.sh ~/exported
+```
+
+The installer creates the system user `cartpole` (in group `dialout` for the Pico's serial port) and copies the
+controller files and the policy to `/opt/cartpole`. It creates a Python venv there with torch and pyserial,
+then installs and starts `cartpole.service`. Open `http://<pi-address>:8000`; the motor stays off until you press
+Start.
+
+- Update the code or the policy: `git pull`, then run `sudo ./install-pi.sh <exported-dir>` again.
+- Options: `/etc/default/cartpole` (`CARTPOLE_ARGS="--web"`; add `--fake` to test the Pi without the rig,
+  `--port N` for another port), then `sudo systemctl restart cartpole`.
+- Logs: `journalctl -u cartpole -f`. Stop: `sudo systemctl stop cartpole`. Disable at boot:
+  `sudo systemctl disable cartpole`.
+- Stopping the service sends SIGINT (not SIGTERM), so the controller's cleanup runs and sends PWM 0 before it
+  exits. Still keep a physical emergency stop on the rig.
+- Until `read_encoders()` / `write_pwm()` talk to the Pico, the hardware mode only sees the stub's constant
+  values. Use `--fake` to see the page work.
 
 ## Live web page from the Pi
 

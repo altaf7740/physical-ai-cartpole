@@ -1,0 +1,28 @@
+# Cart-pole balance controller: policy at 60 Hz + live web page (http://<pi>:8000).
+# Installed to /etc/systemd/system/ by install-pi.sh. Options (e.g. --fake, --port) go in /etc/default/cartpole.
+# With --web the controller starts idle (motor off) and waits for Start on the page.
+
+[Unit]
+Description=Cart-pole balance controller with live web page
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cartpole
+Group=cartpole
+SupplementaryGroups=dialout
+WorkingDirectory=/opt/cartpole
+Environment=CARTPOLE_ARGS=--web
+EnvironmentFile=-/etc/default/cartpole
+ExecStart=/opt/cartpole/venv/bin/python -u /opt/cartpole/run_policy.py --policy /opt/cartpole/policy.pt --io /opt/cartpole/policy_io.json $CARTPOLE_ARGS
+# SIGINT (not systemd's default SIGTERM) so run_policy.py's cleanup runs and sends PWM 0 before exiting
+KillSignal=SIGINT
+TimeoutStopSec=5
+Restart=on-failure
+RestartSec=2
+# steadier 60 Hz timing
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target
