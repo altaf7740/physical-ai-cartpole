@@ -15,9 +15,9 @@ RSL-RL 5.0.1.
 ```
 src/cartpole_rig/
   rig_cfg.py               ALL physical parameters, delays, noise, reward weights, DR ranges (edit this)
-  asset.py                 builds assets/cartpole_rig.usda from rig_cfg each time the scene spawns:
-                           rail + end blocks, gear motor, GT2 pulleys and belt, carriage with the
-                           pendulum encoder, pendulum on the encoder shaft
+  usd_builder.py           builds assets/cartpole_rig.usda from rig_cfg (pxr only): rail + end blocks, gear
+                           motor, GT2 pulleys and belt, carriage with the pendulum encoder, pendulum
+  asset.py                 Isaac Lab articulation + actuators; rebuilds the USD each time the scene spawns
   mdp.py                   DCMotorAction, rig_state observation (noise + delay), randomize_drive event
   env_cfg.py               manager-based env cfg (scene, actions, obs, events, rewards, terminations)
   agents/rsl_rl_ppo_cfg.py PPO, 64x64 ELU actor and critic, no observation normalizer
@@ -25,6 +25,8 @@ scripts/
   train.py                 Isaac Lab's stock rsl_rl/train.py with this task filled in
   play.py                  export policy.pt / policy.onnx / policy_io.json, then run and print statistics
   evaluate.py              stress test: one episode per env (4096), failure rate, margin, failures by parameter
+  isaacsim_play.py         plain Isaac Sim player (`make run-sim`): policy + DC motor on Isaac Sim's physics steps
+  viewer_ui.py             signal panel + keyboard taps (Kit UI only; used by play.py and isaacsim_play.py)
 pi/
   run_policy.py            standalone 60 Hz inference stub for the Raspberry Pi (torch only)
 ```
@@ -39,8 +41,9 @@ C:\isaac\IsaacLab\isaaclab.bat -p -m pip install -e C:\Users\Admin\Desktop\rnd\c
 
 | command | what it does |
 |---|---|
-| `make` / `make gui` | viewer + signal panel; LEFT/RIGHT tap the pole, A/D bump the cart, UP/DOWN tap strength |
-| `make gui-random` | viewer + signal panel with random taps, as in training |
+| `make` / `make run-lab` | viewer + signal panel; LEFT/RIGHT tap the pole, A/D bump the cart, UP/DOWN tap strength |
+| `make run-lab-random` | viewer + signal panel with random taps, as in training |
+| `make run-sim` | the rig in the **plain Isaac Sim app** (no Isaac Lab): nominal parameters, newest exported `policy.pt` (or `POLICY=...`), signal panel, same keys plus **R** = reset; it resets by itself after a fall |
 | `make install` | install this package into Isaac Lab's Python (once) |
 | `make train` | train headless (600 iterations, about 7 min) |
 | `make play` | headless: export `policy.pt` / `.onnx` / `policy_io.json` and print statistics |

@@ -1,4 +1,6 @@
-"""Live signal panel for the Kit viewer: env 0's policy inputs and outputs in physical units, with 5 s plots.
+"""Kit viewer helpers (omni.ui / carb input only, no Isaac Lab): a live signal panel and keyboard taps.
+
+SignalPanel: env 0's policy inputs and outputs in physical units, with 5 s plots.
 
 Inputs are shown as the policy sees them (noisy and delayed, divided back out of obs_scale), with the true
 simulator value next to them. Plot ranges are the termination limits / physical limits from RIG.
@@ -73,3 +75,56 @@ class SignalPanel:
 
     def destroy(self):
         self._window.destroy()
+
+
+class KeyTaps:
+    """Viewer keyboard disturbances, applied to every env (click the viewer window first so it has focus).
+
+    LEFT / RIGHT  tap the pole toward -x / +x     (pole angular velocity -/+ rig.push_pole_vel * strength)
+    A / D         bump the cart toward -x / +x    (cart velocity -/+ 3 * rig.push_cart_vel * strength)
+    UP / DOWN     stronger / weaker (x1.25 per press)
+    R             reset request (used by the plain Isaac Sim player)
+    (numpad 4 / 6 / 8 / 2 work as the arrows)
+    """
+
+    # Kit reports arrow keys as LEFT/RIGHT/UP/DOWN or as NUMPAD_4/6/8/2 depending on how they were sent
+    _ALIASES = {"NUMPAD_4": "LEFT", "NUMPAD_6": "RIGHT", "NUMPAD_8": "UP", "NUMPAD_2": "DOWN"}
+
+    def __init__(self, rig):
+        import carb
+        import omni.appwindow
+
+        self.rig = rig
+        self.strength = 1.0
+        self.reset_requested = False
+        self._pending = []  # (d_cart_vel, d_pole_vel) to apply before the next step
+        self._input = carb.input.acquire_input_interface()
+        self._keyboard = omni.appwindow.get_default_app_window().get_keyboard()
+        self._press = carb.input.KeyboardEventType.KEY_PRESS
+        self._sub = self._input.subscribe_to_keyboard_events(self._keyboard, self._on_key)
+        print("[INFO] keyboard taps:" + self.__doc__.split("\n", 1)[1].rstrip())
+
+    def _on_key(self, event, *args) -> bool:
+        if event.type != self._press:
+            return True
+        name = self._ALIASES.get(event.input.name, event.input.name)
+        if name == "R":
+            self.reset_requested = True
+            return True
+        if name in ("UP", "DOWN"):
+            self.strength *= 1.25 if name == "UP" else 0.8
+            print(f"[TAP] strength x{self.strength:.2f} (pole tap {self.rig.push_pole_vel * self.strength:.2f} rad/s)")
+            return True
+        pole, cart = self.rig.push_pole_vel * self.strength, 3 * self.rig.push_cart_vel * self.strength
+        tap = {"LEFT": (0.0, -pole), "RIGHT": (0.0, pole), "A": (-cart, 0.0), "D": (cart, 0.0)}.get(name)
+        if tap is not None:
+            self._pending.append(tap)
+            print(f"[TAP] {name}: cart {tap[0]:+.2f} m/s, pole {tap[1]:+.2f} rad/s")
+        return True
+
+    def pop(self) -> list:
+        pending, self._pending = self._pending, []
+        return pending
+
+    def close(self):
+        self._input.unsubscribe_to_keyboard_events(self._keyboard, self._sub)

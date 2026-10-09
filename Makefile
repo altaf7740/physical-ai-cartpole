@@ -1,25 +1,31 @@
 # Cart-pole rig shortcuts (GNU Make on Windows; recipes run in cmd.exe).
 #   make            open the viewer: trained policy + signal panel + keyboard taps
+#   make run-sim    same rig in the plain Isaac Sim app (no Isaac Lab), keyboard taps, R = reset
 #   make help       list all targets
 # Variables: ISAACLAB (Isaac Lab folder), ENVS (rigs shown), CKPT (checkpoint, default = latest run),
-#   PUSH (tap strength for eval), e.g.  make gui ENVS=4  /  make eval PUSH=0.5
+#   PUSH (tap strength for eval), POLICY (exported policy.pt for `make run-sim`, default = newest),
+#   e.g.  make run-lab ENVS=4  /  make eval PUSH=0.5
 
 SHELL := cmd.exe
 ISAACLAB ?= C:\isaac\IsaacLab
 ENVS ?= 16
 CKPT ?=
 PUSH ?= 1
+POLICY ?=
 
 RUN := "$(ISAACLAB)\isaaclab.bat" -p
 CKPT_ARG := $(if $(CKPT),--checkpoint $(CKPT),)
 
-.PHONY: gui gui-random help install train play eval
+.PHONY: run-lab run-lab-random run-sim help install train play eval
 
-gui: ## viewer with signal panel; LEFT/RIGHT tap the pole, A/D bump the cart, UP/DOWN strength
+run-lab: ## viewer with signal panel; LEFT/RIGHT tap the pole, A/D bump the cart, UP/DOWN strength
 	$(RUN) scripts\play.py --viz kit --num_envs $(ENVS) --steps 0 --real-time --keyboard $(CKPT_ARG)
 
-gui-random: ## viewer with signal panel and random taps (as in training)
+run-lab-random: ## viewer with signal panel and random taps (as in training)
 	$(RUN) scripts\play.py --viz kit --num_envs $(ENVS) --steps 0 --real-time $(CKPT_ARG)
+
+run-sim: ## plain Isaac Sim app (no Isaac Lab): nominal rig + exported policy.pt; arrows/A/D taps, R reset
+	set "CARTPOLE_ROOT=$(CURDIR)" && set "CARTPOLE_POLICY=$(POLICY)" && "$(ISAACLAB)\_isaac_sim\isaac-sim.bat" --exec "$(CURDIR)/scripts/isaacsim_play.py"
 
 help: ## list targets
 	@findstr /R /C:"^[a-z-]*:.*##" Makefile
