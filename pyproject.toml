@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cartpole_rig"
+version = "0.1.0"
+description = "Balance-only cart-pole for a real belt-driven rig (Isaac Lab)"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
