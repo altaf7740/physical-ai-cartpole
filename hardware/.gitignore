@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+config.toml
+logs/*
+!logs/.gitkeep
+models/*
+!models/.gitkeep
+!models/README.md

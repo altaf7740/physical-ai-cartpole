@@ -36,6 +36,8 @@ pi/
   fake_rig.py              simulated rig for testing without hardware (--fake)
   install-pi.sh            installs / updates the controller as a service on the Pi
   cartpole.service         systemd unit (starts at boot, motor off until Start on the page)
+hardware/                  the real rig: Pi 4 policy runner + web UI, and the Pico firmware (encoder + TB6600
+                           step/dir); see hardware/README.md
 ```
 
 ## Setup (once)
