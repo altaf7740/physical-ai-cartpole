@@ -18,9 +18,11 @@ Pico wiring (`src/pico_main.py`, flashed with `make flash` on the Pi):
 | GP17 | TB6600 DIR+ |
 | GND | TB6600 PUL-, DIR-, ENA- (ENA+ open: driver always enabled) |
 | GP2 / GP3 | encoder A / B (internal pull-ups on) |
+| GP13 / GP1 | left / right limit switch, COM + NC to GND (internal pull-up; pressed or broken wire = high) |
 
 The TB6600 DIP switches are on 1/16 microstepping (3200 steps/rev), so `steps_per_meter = 80000`;
-change both together. No limit switch is wired, so the Pico always reports it as open.
+change both together. The Pico never steps toward a pressed limit switch (moving away is allowed), and
+negative steps must move the cart toward the left switch.
 
 ## Layout
 
@@ -67,8 +69,8 @@ make ui-stop     # Pi: stop the background UI (motor commanded to 0)
 - **Control:** hold-to-jog (buttons or ← →) with a speed slider, reset counters, dry run, and LIVE
   (needs the *Armed* checkbox), clear fault, and CSV recording. **E-STOP** is the button, `Space` or `Esc`.
 - **Safety:** a jog only lasts `jog_timeout_s` unless the browser keeps repeating it, so a closed
-  tab, lost focus or dropped network stops the cart. Past the soft limit or on the limit switch, a jog only
-  moves back toward centre. The server listens on `0.0.0.0:8000` with **no login**, so anyone on the LAN can drive the motor.
+  tab, lost focus or dropped network stops the cart. There is no soft limit: the Pico stops the cart at
+  either limit switch and only lets it move away from a pressed one. The server listens on `0.0.0.0:8000` with **no login**, so anyone on the LAN can drive the motor.
   On an untrusted network, set `host = "127.0.0.1"` and use `make ui-remote`.
 - The UI and the CLI commands can't run at the same time, since both need the serial port.
 
@@ -130,5 +132,5 @@ The real loop has **one control period of action delay**, so model that in the s
 ## Safety
 
 - The policy only drives the motor while |θ| < `engage_angle_deg`. It lets go above `disengage_angle_deg`.
-- These faults latch until restart: the limit switch, |x| > `track_limit_m`, or more than `max_missed_reads` missed replies in a row.
+- These faults latch until restart: a limit switch, or more than `max_missed_reads` missed replies in a row.
 - Ctrl+C and SIGTERM both send `0` to the Pico before exiting.

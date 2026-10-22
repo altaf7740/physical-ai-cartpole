@@ -34,7 +34,6 @@ force_mass_kg = 1.0          # only for action_type = "force": a = F / mass (rou
 [safety]
 engage_angle_deg = 15        # policy takes over when |theta| drops below this
 disengage_angle_deg = 25     # and lets go (motor stop) above this
-track_limit_m = 0.25         # soft limit from the reset position; latches a fault
 max_cart_vel_mps = 0.4       # also capped by max_step_rate / steps_per_meter
 max_missed_reads = 5         # consecutive missed Pico replies before a fault
 

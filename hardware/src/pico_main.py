@@ -4,12 +4,16 @@
 # Protocol, newline-terminated ASCII, one reply per command:
 #   "R"          -> zero counters, stop; reply "0,0,0"
 #   "<steps/s>"  -> signed microstep rate;   reply "<enc_ticks>,<cart_steps>,<lim_hit>"
+#   lim_hit is a bitmask: 1 = left switch pressed, 2 = right, 3 = both (the host treats non-zero as hit).
 # Watchdog: stepping stops if no command arrives for WATCHDOG_MS (host crashed/unplugged).
+# Limits: a step toward a pressed switch is never sent (hard stop, no ramp); moving away is allowed.
+# Negative steps move toward the left switch.
 #
 # Wiring (TB6600 inputs common cathode: PUL-, DIR-, ENA- to Pico GND):
 #   Pico GP16 -> PUL+   Pico GP17 -> DIR+   ENA+ open (driver always enabled, holds torque at rest)
 #   Pico GP2 / GP3 -> encoder A / B
-#   No limit switches are wired, so lim_hit is always 0.
+#   Pico GP13 / GP1 -> left / right limit switch, C + NC to GND (internal pull-up): closed = low at rest,
+#   pressed = open = high. A broken wire also reads high, so it stops the cart instead of going unnoticed.
 # Microstepping and current are set on the TB6600 DIP switches (1/16 = 3200 steps/rev);
 # [hardware] steps_per_meter in config.toml must match.
 #
@@ -63,9 +67,19 @@ def enc_isr(pin):
     enc_state = s
 
 
+# --- Limit switches (GP13 left, GP1 right; normally closed to GND, so pressed = high) ---
+LIM_L = Pin(13, Pin.IN, Pin.PULL_UP)
+LIM_R = Pin(1, Pin.IN, Pin.PULL_UP)
+
+
+def limit_hit():
+    return LIM_L.value() | (LIM_R.value() << 1)
+
+
 # --- Stepper (TB6600) ---
 PUL_PIN = 16
 DIR_PIN = 17
+DIR_POSITIVE = 0     # DIR level for positive steps (away from the left switch); flip if they move toward it
 PIO_HZ = 1_000_000   # 1 cycle = 1 us
 PIO_OVERHEAD = 10    # pull + 2x out + final jmp + 5 high + 1 low
 FIFO_DEPTH = 8
@@ -101,9 +115,13 @@ try:
                 s = START_HZ if abs(target) > START_HZ else abs(target)
                 v = s if target > 0 else -s
 
+            if (v < 0 and LIM_L.value()) or (v > 0 and LIM_R.value()):
+                v = 0  # at a switch: stop dead; the next pass may start away from it
+                break
+
             cart_steps += 1 if v > 0 else -1
             s = v if v > 0 else -v
-            sm.put((1 if v > 0 else 0) | ((PIO_HZ // s - PIO_OVERHEAD) << 1))
+            sm.put((DIR_POSITIVE if v > 0 else 1 - DIR_POSITIVE) | ((PIO_HZ // s - PIO_OVERHEAD) << 1))
 
             # Ramp toward target; when stopping or reversing, decelerate first
             if target != 0 and (target > 0) == (v > 0):
@@ -137,14 +155,14 @@ try:
                 cart_steps = 0
                 target = 0
                 v = 0
-                print("0,0,0")
+                print("0,0,%d" % limit_hit())
                 continue
             try:
                 freq = int(cmd)
             except ValueError:
                 continue
             target = 0 if abs(freq) < 5 else max(-MAX_HZ, min(MAX_HZ, freq))
-            print("%d,%d,0" % (enc_ticks, cart_steps))
+            print("%d,%d,%d" % (enc_ticks, cart_steps, limit_hit()))
 
 except Exception as e:
     print("ERR," + repr(e))  # the host can't parse this, so it counts as missed replies and faults

@@ -116,9 +116,9 @@ class TestSafety(unittest.TestCase):
 
     def test_faults_latch(self):
         mon = SafetyMonitor(template_config().safety)
-        mon.update(self.state(0), False)
-        self.assertIs(mon.update(self.state(0, x=0.3), False), Mode.FAULT)
-        self.assertIs(mon.update(self.state(0), False), Mode.FAULT)
+        self.assertIsNot(mon.update(self.state(0, x=0.3), False), Mode.FAULT)  # no soft track limit
+        self.assertIs(mon.update(self.state(0), True), Mode.FAULT)
+        self.assertIs(mon.update(self.state(0), False), Mode.FAULT)  # stays latched after the switch opens
 
     def test_limit_switch_and_lost_link(self):
         mon = SafetyMonitor(template_config().safety)
@@ -192,12 +192,11 @@ class TestHardwareService(unittest.TestCase):
         with self.assertRaises(CommandError):
             self.svc.jog(0.1)
 
-    def test_manual_jog_blocked_outward_past_limit(self):
+    def test_manual_jog_ignores_soft_limit(self):
+        # The physical switches stop the cart (in the Pico); manual jog may use the whole track.
         self.svc._jog_velocity, self.svc._jog_deadline = 0.1, time.monotonic() + 1
         beyond = CartPoleState(0.3, 0.0, 0.0, 0.0)
-        self.assertEqual(self.svc._manual_rate(beyond, False), 0)
-        self.svc._jog_velocity = -0.1
-        self.assertEqual(self.svc._manual_rate(beyond, True), -round(0.1 * self.cfg.hardware.steps_per_meter))
+        self.assertEqual(self.svc._manual_rate(beyond), round(0.1 * self.cfg.hardware.steps_per_meter))
 
 
 if __name__ == "__main__":

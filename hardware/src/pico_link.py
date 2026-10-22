@@ -4,6 +4,7 @@ Protocol (newline-terminated ASCII, one request -> one reply):
     Pi  -> Pico : "R"            reset encoder and step counters
     Pi  -> Pico : "<step_rate>"  signed half-steps per second, e.g. "-1250"
     Pico -> Pi  : "<encoder_ticks>,<cart_steps>,<limit_hit>"
+                  limit_hit: 0 none, 1 left, 2 right, 3 both (any non-zero counts as hit)
 """
 
 from __future__ import annotations

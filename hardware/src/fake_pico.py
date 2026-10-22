@@ -16,13 +16,13 @@ GRAVITY = 9.81
 POLE_LENGTH_M = 0.3
 POLE_DAMPING = 0.05  # 1/s
 SUBSTEP_S = 0.001
-HARD_LIMIT_MARGIN_M = 0.05  # limit switch sits this far beyond the soft track limit
+END_STOP_M = 0.3  # simulated limit switches, this far either side of the reset position
 
 
 class FakePico:
     def __init__(self, cfg: Config):
         self.hw = cfg.hardware
-        self.hard_limit_m = cfg.safety.track_limit_m + HARD_LIMIT_MARGIN_M
+        self.hard_limit_m = END_STOP_M
         # Start where the config says the pole is at reset, so readings are consistent.
         self._theta = math.pi if self.hw.angle_zero == "down" else 0.0  # rad, 0 = upright, unwrapped
         self._omega = 0.0

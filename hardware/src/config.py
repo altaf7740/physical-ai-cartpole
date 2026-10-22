@@ -60,7 +60,6 @@ class PolicyConfig:
 class SafetyConfig:
     engage_angle_deg: float = 15.0
     disengage_angle_deg: float = 25.0
-    track_limit_m: float = 0.25
     max_cart_vel_mps: float = 0.4
     max_missed_reads: int = 5
 
@@ -136,8 +135,8 @@ def _validate(cfg: Config) -> None:
         raise ConfigError("[policy] force_mass_kg must be > 0")
     if saf.disengage_angle_deg < saf.engage_angle_deg:
         raise ConfigError("[safety] disengage_angle_deg must be >= engage_angle_deg")
-    if saf.track_limit_m <= 0 or saf.max_cart_vel_mps <= 0:
-        raise ConfigError("[safety] track_limit_m and max_cart_vel_mps must be > 0")
+    if saf.max_cart_vel_mps <= 0:
+        raise ConfigError("[safety] max_cart_vel_mps must be > 0")
     if not 0 < cfg.ui.port < 65536 or cfg.ui.push_hz <= 0 or cfg.ui.jog_timeout_s <= 0:
         raise ConfigError("[ui] port must be 1-65535; push_hz and jog_timeout_s must be > 0")
 

@@ -44,8 +44,6 @@ class SafetyMonitor:
             return self.mode
         if limit_hit:
             return self._fault("limit switch hit")
-        if abs(state.cart_pos) > self.cfg.track_limit_m:
-            return self._fault(f"cart at {state.cart_pos:+.3f} m beyond soft limit")
 
         angle = abs(state.pole_pos)
         if self.mode is Mode.IDLE and angle < self.engage:

@@ -142,7 +142,6 @@ class HardwareService:
         return {
             "fake": self.fake,
             "rate_hz": cfg.policy.rate_hz,
-            "track_limit_m": cfg.safety.track_limit_m,
             "engage_deg": cfg.safety.engage_angle_deg,
             "disengage_deg": cfg.safety.disengage_angle_deg,
             "max_velocity": self.max_velocity,
@@ -225,15 +224,10 @@ class HardwareService:
             self._link_state = "error" if error else "disconnected"
             self._error = error
 
-    def _manual_rate(self, state: CartPoleState | None, limit_hit: bool) -> int:
+    def _manual_rate(self, state: CartPoleState | None) -> int:
+        # No soft limit: the Pico refuses steps toward a pressed limit switch and allows moving away.
         v = self._jog_velocity
         if v == 0.0 or time.monotonic() > self._jog_deadline or state is None:
-            return 0
-        outward = v * state.cart_pos
-        # Past a limit, only allow jogging back towards the centre.
-        if limit_hit and outward >= 0:
-            return 0
-        if abs(state.cart_pos) > self.cfg.safety.track_limit_m and outward > 0:
             return 0
         return self._jog_converter.velocity_to_step_rate(v)
 
@@ -242,7 +236,7 @@ class HardwareService:
         limit_hit = tel is not None and tel.limit_hit
         safety, reason, action, policy_rate = "", "", 0.0, None
         if self._controller is None:
-            send = self._manual_rate(state, limit_hit)
+            send = self._manual_rate(state)
         else:
             mode = self._controller.step(state, limit_hit, dt)
             safety, reason = mode.value, self._controller.safety.reason
