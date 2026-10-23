@@ -21,13 +21,13 @@ EXPORTED := $(lastword $(sort $(wildcard logs/rsl_rl/cartpole_rig/*/exported)))
 
 .PHONY: run-lab run-lab-random run-sim policy help install train play eval
 
-run-lab: ## viewer with signal panel; LEFT/RIGHT tap the pole, A/D bump the cart, UP/DOWN strength
+run-lab: ## viewer with signal panel; LEFT/RIGHT tap the pole, UP/DOWN strength
 	$(RUN) scripts\play.py --viz kit --num_envs $(ENVS) --steps 0 --real-time --keyboard $(CKPT_ARG)
 
 run-lab-random: ## viewer with signal panel and random taps (as in training)
 	$(RUN) scripts\play.py --viz kit --num_envs $(ENVS) --steps 0 --real-time $(CKPT_ARG)
 
-run-sim: ## plain Isaac Sim app (no Isaac Lab): nominal rig + exported policy.pt; arrows/A/D taps, R reset
+run-sim: ## plain Isaac Sim app (no Isaac Lab): nominal rig + exported policy.pt; arrow-key taps, R reset
 	set "CARTPOLE_ROOT=$(CURDIR)" && set "CARTPOLE_POLICY=$(POLICY)" && "$(ISAACLAB)\_isaac_sim\isaac-sim.bat" --exec "$(CURDIR)/scripts/isaacsim_play.py"
 
 policy: ## copy the newest export (policy.pt, policy_pi.onnx, policy_io.json) into policy/ for git

@@ -9,8 +9,8 @@ startup_delay_s = 2.0        # wait after opening the port (Pico may reboot)
 
 [hardware]
 encoder_cpr = 2400           # 600 PPR x 4 quadrature edges
-steps_per_meter = 80000      # TB6600 at 1/16 = 3200 steps/rev, 20T GT2 pulley = 0.04 m/rev
-max_step_rate = 20000        # steps/s, the TB6600 input limit (= 0.25 m/s at 1/16)
+steps_per_meter = 40000      # TB6600 at 1/8 = 1600 steps/rev, 20T GT2 pulley = 0.04 m/rev
+max_step_rate = 20000        # steps/s, the TB6600 input limit (= 0.5 m/s at 1/8)
 encoder_sign = 1             # flip to -1 if +theta is the opposite way to the sim
 cart_sign = 1                # flip to -1 if +x is the opposite way to the sim
 angle_zero = "down"          # where the pole is when counters reset: "down" or "upright"
@@ -20,22 +20,23 @@ calibration_file = "track_calibration.json"  # measured track travel, written by
 velocity_alpha = 0.3         # low-pass weight on new velocity samples (1.0 = no filter)
 
 [policy]
-model_path = "models/policy.onnx"   # or models/policy.npz
+# The committed policy (../policy, from `make policy` in the repo root). Its policy_io.json "pi_config" lists
+# the values below that it was trained for.
+model_path = "../policy/policy_pi.onnx"
 backend = "auto"             # "auto" (by file extension), "onnx" or "numpy"
 rate_hz = 60                 # MUST equal the training control rate: 1 / (sim.dt * decimation)
-# Observation order exactly as in the training env. Isaac Lab manager-based
-# Cartpole uses joint_pos_rel then joint_vel_rel = [cart_pos, pole_pos, cart_vel, pole_vel].
-# The direct env (Isaac-Cartpole-Direct-v0) uses [pole_pos, pole_vel, cart_pos, cart_vel].
-obs_order = ["cart_pos", "pole_pos", "cart_vel", "pole_vel"]
-action_type = "velocity"     # "velocity" (m/s), "acceleration" (m/s^2) or "force" (N)
-action_scale = 1.0           # the env's action scale (raw action * scale = physical units)
+# Observation order and scale exactly as in the training env (src/cartpole_rig: rig_state, RIG.obs_scale)
+obs_order = ["cart_pos", "cart_vel", "pole_pos", "pole_vel"]
+obs_scale = [2.857142857142857, 4.0, 10.0, 1.0]   # 1/0.35 m, 1/0.25 m/s, 1/0.1 rad, 1/1 rad/s
+action_type = "acceleration" # the policy outputs cart acceleration; the Pi integrates it into a speed
+action_scale = 5.0           # m/s^2 per unit action (RIG.max_accel)
 action_clip = 1.0            # clip the raw policy output to +/- this before scaling
 force_mass_kg = 1.0          # only for action_type = "force": a = F / mass (rough)
 
 [safety]
-engage_angle_deg = 15        # policy takes over when |theta| drops below this
-disengage_angle_deg = 25     # and lets go (motor stop) above this
-max_cart_vel_mps = 0.4       # also capped by max_step_rate / steps_per_meter
+engage_angle_deg = 5         # policy takes over when |theta| drops below this (trained from +-5 deg)
+disengage_angle_deg = 20     # and lets go (motor stop) above this
+max_cart_vel_mps = 0.25      # = RIG.max_speed (the stepper loses steps above ~0.3 m/s at 1.0 A)
 max_missed_reads = 5         # consecutive missed Pico replies before a fault
 
 [logging]

@@ -51,6 +51,8 @@ class PolicyConfig:
     backend: str = "auto"
     rate_hz: float = 60.0
     obs_order: tuple[str, ...] = OBS_KEYS
+    # Per-entry factor applied to obs_order before the policy (the env's ObsTerm scale); empty = no scaling.
+    obs_scale: tuple[float, ...] = ()
     action_type: str = "velocity"
     action_scale: float = 1.0
     action_clip: float = 1.0
@@ -114,6 +116,8 @@ def _build_section(cls, raw: dict, name: str):
     values = dict(raw)
     if "obs_order" in values:
         values["obs_order"] = tuple(values["obs_order"])
+    if "obs_scale" in values:
+        values["obs_scale"] = tuple(float(v) for v in values["obs_scale"])
     return cls(**values)
 
 
@@ -136,6 +140,8 @@ def _validate(cfg: Config) -> None:
     bad = [k for k in pol.obs_order if k not in OBS_KEYS]
     if bad or len(set(pol.obs_order)) != len(pol.obs_order) or not pol.obs_order:
         raise ConfigError(f"[policy] obs_order must be unique entries from {OBS_KEYS}")
+    if pol.obs_scale and len(pol.obs_scale) != len(pol.obs_order):
+        raise ConfigError("[policy] obs_scale must be empty or have one entry per obs_order entry")
     if pol.action_type == "force" and pol.force_mass_kg <= 0:
         raise ConfigError("[policy] force_mass_kg must be > 0")
     if saf.disengage_angle_deg < saf.engage_angle_deg:

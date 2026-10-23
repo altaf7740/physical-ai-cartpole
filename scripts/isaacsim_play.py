@@ -3,13 +3,13 @@
 Start it through Isaac Sim's own launcher (``make run-sim`` does this), from the project folder:
     C:\\isaac\\IsaacLab\\_isaac_sim\\isaac-sim.bat --exec scripts\\isaacsim_play.py
 
-It builds the rig USD from rig_cfg.py, adds a physics scene (120 Hz, CPU), a light and a floor, loads policy.pt
-(newest logs/rsl_rl/cartpole_rig/*/exported/policy.pt, or the CARTPOLE_POLICY environment variable) and presses
-Play. On every physics step it runs the same DC-motor + rail-friction model as the Isaac Lab env, and every
-second step (60 Hz) the policy, with the nominal one-step action delay. No noise and no domain randomization:
-this is the nominal rig.
+It builds the rig USD from rig_cfg.py, adds a physics scene (1 / RIG.sim_dt, CPU), a light and a floor, loads
+policy.pt (newest logs/rsl_rl/cartpole_rig/*/exported/policy.pt, or the CARTPOLE_POLICY environment variable) and
+presses Play. On every physics step it runs the same stepper model as the Isaac Lab env (Pico ramp toward the
+speed command, pivot Coulomb friction), and at 60 Hz the policy, with the nominal one-step action delay. The policy
+sees the true state (no quantization, filter or noise) and nothing is randomized: this is the nominal rig.
 
-Keys (click the viewport first): LEFT / RIGHT tap the pole, A / D bump the cart, UP / DOWN tap strength,
+Keys (click the viewport first): LEFT / RIGHT tap the pole, UP / DOWN tap strength,
 R reset. The rig also resets by itself when the pole passes the termination angle or the cart leaves the rail.
 """
 
@@ -91,7 +91,7 @@ def set_camera():
 
 
 class Player:
-    """Policy + DC motor on Isaac Sim's physics steps."""
+    """Policy + stepper (Pi speed command, Pico ramp) on Isaac Sim's physics steps."""
 
     def __init__(self, policy_path: str):
         self.policy = torch.jit.load(policy_path, map_location="cpu").eval()
@@ -100,10 +100,10 @@ class Player:
         self.panel = SignalPanel(RIG)
         self.view = None
         self.steps = 0
-        self.command = 0.0  # voltage fraction applied this step (policy output delayed one control step)
-        self.next_command = 0.0
+        self.v_cmd = 0.0  # [m/s] Pi speed command
+        self.target = 0.0  # [m/s] command the Pico executes (one control step later)
+        self.v = 0.0  # [m/s] stepper speed
         self.action = 0.0
-        self.force = 0.0
         self.falls = 0
         self.speed, self.t_last = 1.0, time.time()
         self._sub = omni.physx.get_physx_interface().subscribe_physics_step_events(self._on_step)
@@ -125,7 +125,7 @@ class Player:
         q[0, self.pole] = random.uniform(-RIG.reset_pole_angle, RIG.reset_pole_angle)
         self.view.set_dof_positions(q, self.idx)
         self.view.set_dof_velocities(np.zeros_like(q), self.idx)
-        self.command = self.next_command = self.action = 0.0
+        self.v_cmd = self.target = self.v = self.action = 0.0
 
     def _on_step(self, dt: float):
         if self.view is None:
@@ -150,16 +150,18 @@ class Player:
                 qd[0, self.pole] += d_pole
             self.view.set_dof_velocities(qd, self.idx)
 
-        # policy at 60 Hz; its output reaches the motor one control step later (nominal action delay)
+        # policy at 60 Hz (true state, no sensor model); its speed command reaches the Pico one control step later
         if self.steps % RIG.decimation == 0:
             raw = np.array([x, x_dot, theta, theta_dot], dtype=np.float32)
             with torch.inference_mode():
                 self.action = float(self.policy(torch.from_numpy(raw * self.scale)[None])[0, 0].clamp(-1.0, 1.0))
-            self.command, self.next_command = self.next_command, self.action
+            self.target = self.v_cmd
+            dt_c = RIG.sim_dt * RIG.decimation
+            self.v_cmd = max(-RIG.max_speed, min(RIG.max_speed, self.v_cmd + self.action * RIG.max_accel * dt_c))
             now = time.time()
             self.speed = 0.97 * self.speed + 0.03 * (RIG.sim_dt * RIG.decimation) / max(now - self.t_last, 1e-6)
             self.t_last = now
-            self.panel.update(raw.tolist(), raw.tolist(), self.action, self.command * RIG.supply_voltage, self.force, self.speed)
+            self.panel.update(raw.tolist(), raw.tolist(), self.action, self.target, self.v, self.speed)
         if self.steps % round(5.0 / RIG.sim_dt) == 0:  # status line every 5 s of sim time
             print(
                 f"[isaacsim_play] t={self.steps * RIG.sim_dt:6.1f} s  x={x:+.3f} m  theta={theta:+.3f} rad  "
@@ -168,16 +170,22 @@ class Player:
             )
         self.steps += 1
 
-        # DC motor through the belt + rail friction (same equations as mdp.DCMotorAction, nominal values)
-        r = RIG.pulley_radius
-        current = (self.command * RIG.supply_voltage - RIG.motor_ke * x_dot / r) / RIG.motor_resistance
-        belt = max(-RIG.max_force, min(RIG.max_force, RIG.motor_kt * current / r))
-        self.force = belt - RIG.cart_viscous * x_dot - RIG.cart_coulomb * math.tanh(x_dot / 0.01)
+        # Pico ramp toward the speed command (same rules as mdp.StepperAction), pivot Coulomb friction
+        v, tgt, dv, v0 = self.v, self.target, RIG.pico_accel * RIG.sim_dt, RIG.pico_start_speed
+        if v == 0.0 and tgt != 0.0:
+            v = math.copysign(min(abs(tgt), v0), tgt)
+        if tgt != 0.0 and (tgt > 0) == (v > 0):
+            s = min(abs(v) + dv, abs(tgt)) if abs(v) < abs(tgt) else max(abs(v) - dv, abs(tgt))
+        else:
+            s = abs(v) - dv
+            s = 0.0 if s <= v0 else s
+        self.v = math.copysign(s, v) if v != 0.0 else 0.0
         f = np.zeros((1, self.view.max_dofs), dtype=np.float32)
-        f[0, self.cart] = self.force
+        f[0, self.pole] = -RIG.pivot_coulomb_accel * RIG.pole_pivot_inertia * math.tanh(theta_dot / 0.02)
         self.view.set_dof_actuation_forces(f, self.idx)
         w = np.zeros_like(f)
-        w[0, self.pulleys] = x_dot / r  # visual pulleys at belt speed
+        w[0, self.cart] = self.v  # the cart's stiff velocity drive = the stepper
+        w[0, self.pulleys] = self.v / RIG.pulley_radius  # visual pulleys at belt speed
         self.view.set_dof_velocity_targets(w, self.idx)
 
 

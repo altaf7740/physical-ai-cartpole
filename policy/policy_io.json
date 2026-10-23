@@ -7,126 +7,127 @@
   ],
   "obs_scale": [
     2.857142857142857,
-    1.4285714285714286,
-    3.3333333333333335,
-    0.3333333333333333
+    4.0,
+    10.0,
+    1.0
   ],
   "obs_formula": "policy_input[i] = raw[i] * obs_scale[i]; no offset, no clipping, no running normalizer",
   "conventions": "x=0 rail centre, +x = direction of travel for +action; theta=0 upright, theta>0 when the pole leans toward +x",
-  "action": "a = clamp(policy(obs)[0], -1, 1); PWM duty = a, signed; motor voltage = a * supply_voltage",
-  "supply_voltage": 12.0,
-  "deadband": 0.0,
+  "action": "a = clamp(policy(obs)[0], -1, 1); cart acceleration = a * max_accel; the Pi integrates it: v_cmd = clip(v_cmd + a * max_accel * dt, +-max_speed), step rate = v_cmd * steps_per_meter",
+  "pi_config": {
+    "obs_order": [
+      "cart_pos",
+      "cart_vel",
+      "pole_pos",
+      "pole_vel"
+    ],
+    "obs_scale": [
+      2.857142857142857,
+      4.0,
+      10.0,
+      1.0
+    ],
+    "action_type": "acceleration",
+    "action_scale": 5.0,
+    "action_clip": 1.0,
+    "rate_hz": 60.0,
+    "max_cart_vel_mps": 0.25,
+    "steps_per_meter": 40000.0,
+    "velocity_alpha": 0.3
+  },
+  "max_accel": 5.0,
+  "max_speed": 0.25,
   "control_hz": 60.0,
   "cart_limit_m": 0.35,
   "max_pole_angle_rad": 0.29670597283903605,
   "trained_obs_delay_steps": [
     0,
-    1
+    0
   ],
   "trained_action_delay_steps": [
     1,
     1
   ],
   "trained_obs_noise_std": [
-    0.0005,
-    0.01,
-    0.002,
-    0.03
+    0.0,
+    0.005,
+    0.001,
+    0.02
   ],
   "rig": {
     "cart_limit": 0.35,
-    "end_stop_margin": 0.01,
+    "end_stop_margin": 0.03,
     "cart_mass": 0.8,
     "pole_mass": 0.197,
-    "pole_length": 0.5,
-    "pole_com": 0.25,
+    "pole_length": 0.375,
+    "pole_com": 0.1875,
     "pole_radius": 0.004,
     "pulley_radius": 0.006366197723675814,
-    "supply_voltage": 12.0,
-    "motor_ke": 0.11459155902616465,
-    "motor_kt": 0.11459155902616465,
-    "motor_resistance": 20.0,
-    "max_force": 11.0,
-    "deadband": 0.0,
-    "motor_inertia": 1.5e-05,
-    "cart_viscous": 0.5,
-    "cart_coulomb": 0.3,
-    "pivot_viscous": 0.0001,
-    "sim_dt": 0.008333333333333333,
+    "steps_per_meter": 40000.0,
+    "max_speed": 0.25,
+    "max_accel": 5.0,
+    "pico_accel": 5.0,
+    "pico_start_speed": 0.03,
+    "cart_drive_damping": 2000.0,
+    "pivot_coulomb_accel": 0.4,
+    "pivot_viscous": 1e-05,
+    "sim_dt": 0.004166666666666667,
     "control_hz": 60.0,
     "episode_s": 15.0,
     "obs_delay_steps": [
       0,
-      1
+      0
     ],
     "action_delay_steps": [
       1,
       1
     ],
-    "reset_pole_angle": 0.13962634015954636,
-    "reset_pole_vel": 0.1,
-    "reset_cart_pos": 0.05,
-    "reset_cart_vel": 0.05,
+    "encoder_cpr": 2400,
+    "velocity_alpha": 0.3,
+    "angle_offset": 0.017453292519943295,
+    "reset_pole_angle": 0.08726646259971647,
+    "reset_pole_vel": 0.3,
+    "reset_cart_pos": 0.1,
+    "reset_cart_vel": 0.0,
     "push_interval_s": [
       2.0,
       4.0
     ],
-    "push_pole_vel": 1.0,
-    "push_cart_vel": 0.1,
+    "push_pole_vel": 0.4,
     "max_pole_angle": 0.29670597283903605,
     "obs_noise_std": [
-      0.0005,
-      0.01,
-      0.002,
-      0.03
+      0.0,
+      0.005,
+      0.001,
+      0.02
     ],
     "obs_scale": [
       2.857142857142857,
-      1.4285714285714286,
-      3.3333333333333335,
-      0.3333333333333333
+      4.0,
+      10.0,
+      1.0
     ],
     "w_alive": 1.0,
-    "w_pole_angle": 5.0,
+    "w_pole_angle": 20.0,
     "w_cart_pos": 1.0,
-    "w_cart_vel": 0.1,
+    "w_cart_vel": 0.5,
     "w_action": 0.01,
-    "w_action_rate": 0.05,
-    "dr_cart_mass": [
-      0.8,
-      1.25
-    ],
+    "w_action_rate": 0.02,
     "dr_pole_mass": [
       0.9,
       1.1
     ],
     "dr_pole_com": [
-      -0.025,
-      0.025
-    ],
-    "dr_cart_friction": [
-      0.5,
-      2.0
+      -0.015,
+      0.015
     ],
     "dr_pivot_friction": [
       0.5,
       2.0
     ],
-    "dr_motor_kt": [
-      0.8,
-      1.2
-    ],
-    "dr_motor_ke": [
-      0.8,
-      1.2
-    ],
-    "dr_motor_resistance": [
-      0.8,
-      1.3
-    ],
-    "dr_motor_inertia": [
-      0.5,
-      2.0
+    "dr_max_accel": [
+      0.9,
+      1.1
     ],
     "dr_obs_noise": [
       0.5,

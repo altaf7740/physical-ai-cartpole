@@ -15,8 +15,8 @@
 #   Pico GP14 / GP15 -> encoder A / B (index channel C/Z not connected)
 #   Pico GP13 / GP1 -> left / right limit switch, C + NC to GND (internal pull-up): closed = low at rest,
 #   pressed = open = high. A broken wire also reads high, so it stops the cart instead of going unnoticed.
-# Microstepping and current are set on the TB6600 DIP switches (1/16 = 3200 steps/rev);
-# [hardware] steps_per_meter in config.toml must match.
+# Microstepping and current are set on the TB6600 DIP switches (1/8 = 1600 steps/rev: S1 off, S2 on,
+# S3 off); [hardware] steps_per_meter in config.toml must match, and START_HZ / ACCEL are in steps.
 #
 # The PIO does the step timing. Each FIFO word is a chunk of steps at one rate: direction
 # (bit 0), steps - 1 (bits 1-7, up to 128 steps) and the per-step period minus PIO_OVERHEAD
@@ -90,9 +90,9 @@ DIR_PIN = 17
 DIR_POSITIVE = 0     # DIR level for positive steps (away from the left switch); flip if they move toward it
 PIO_HZ = 1_000_000   # 1 cycle = 1 us
 PIO_OVERHEAD = 9     # cycles per step besides the delay loop: mov + 1 + 5 high + 1 low + jmp
-MAX_HZ = 20000       # TB6600 input limit; 375 RPM at 1/16
-START_HZ = 2400      # start/stop rate, no ramp below it (0.75 rev/s at 1/16)
-ACCEL = 400_000      # steps/s^2 for ramping up, down and reversing (5 m/s^2 at 1/16, 80000 steps/m)
+MAX_HZ = 20000       # TB6600 input limit; 750 RPM = 0.5 m/s at 1/8
+START_HZ = 1200      # start/stop rate, no ramp below it (0.75 rev/s = 0.03 m/s at 1/8)
+ACCEL = 200_000      # steps/s^2 for ramping up, down and reversing (5 m/s^2 at 1/8, 40000 steps/m)
 CHUNK_US = 1000      # target chunk duration; the ramp advances once per chunk
 MAX_CHUNK = 128      # steps per chunk (7-bit field)
 QUEUE_CHUNKS = 3     # chunks kept queued in the PIO FIFO (stop latency ~3 ms at speed)

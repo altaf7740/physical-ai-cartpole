@@ -37,18 +37,15 @@ class RigSceneCfg(InteractiveSceneCfg):
 
 @configclass
 class ActionsCfg:
-    motor = mdp.DCMotorActionCfg(
+    motor = mdp.StepperActionCfg(
         asset_name="robot",
         joint_name="cart",
-        supply_voltage=RIG.supply_voltage,
-        kt=RIG.motor_kt,
-        ke=RIG.motor_ke,
-        resistance=RIG.motor_resistance,
+        max_speed=RIG.max_speed,
+        max_accel=RIG.max_accel,
+        pico_accel=RIG.pico_accel,
+        pico_start_speed=RIG.pico_start_speed,
         pulley_radius=RIG.pulley_radius,
-        max_force=RIG.max_force,
-        deadband=RIG.deadband,
-        viscous=RIG.cart_viscous,
-        coulomb=RIG.cart_coulomb,
+        pivot_coulomb_torque=RIG.pivot_coulomb_accel * RIG.pole_pivot_inertia,
         delay_steps=RIG.action_delay_steps,
     )
 
@@ -64,12 +61,16 @@ class ObservationsCfg:
                 "noise_std": RIG.obs_noise_std,
                 "noise_scale_range": RIG.dr_obs_noise,
                 "delay_steps": RIG.obs_delay_steps,
+                "steps_per_meter": RIG.steps_per_meter,
+                "encoder_cpr": RIG.encoder_cpr,
+                "alpha": RIG.velocity_alpha,
+                "angle_offset": RIG.angle_offset,
             },
             scale=RIG.obs_scale,
         )
 
         def __post_init__(self) -> None:
-            self.enable_corruption = False  # noise is applied inside rig_state
+            self.enable_corruption = False  # quantization, filter and noise are applied inside rig_state
             self.concatenate_terms = True
 
     policy: PolicyCfg = PolicyCfg()
@@ -78,15 +79,6 @@ class ObservationsCfg:
 @configclass
 class EventCfg:
     # --- startup: body / joint properties (CPU-side writes, done once) ---
-    cart_mass = EventTerm(
-        func=base_mdp.randomize_rigid_body_mass,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=["cart"]),
-            "mass_distribution_params": RIG.dr_cart_mass,
-            "operation": "scale",
-        },
-    )
     pole_mass = EventTerm(
         func=base_mdp.randomize_rigid_body_mass,
         mode="startup",
@@ -101,36 +93,26 @@ class EventCfg:
         mode="startup",
         params={"asset_cfg": SceneEntityCfg("robot", body_names=["pole"]), "com_range": {"z": RIG.dr_pole_com}},
     )
-    motor_inertia = EventTerm(
-        func=base_mdp.randomize_joint_parameters,
-        mode="startup",
-        params={"asset_cfg": CART, "armature_distribution_params": RIG.dr_motor_inertia, "operation": "scale"},
-    )
     pivot_friction = EventTerm(
         func=base_mdp.randomize_actuator_gains,
         mode="startup",
         params={"asset_cfg": POLE, "damping_distribution_params": RIG.dr_pivot_friction, "operation": "scale"},
     )
 
-    # --- reset: motor constants + cart friction (latency and sensor noise are re-sampled in the terms' reset) ---
-    drive = EventTerm(
-        func=mdp.randomize_drive,
+    # --- reset: command integration + pivot Coulomb friction (latency, sensor noise and the angle offset are
+    # re-sampled in the terms' reset) ---
+    stepper = EventTerm(
+        func=mdp.randomize_stepper,
         mode="reset",
-        params={
-            "action_name": "motor",
-            "kt_range": RIG.dr_motor_kt,
-            "ke_range": RIG.dr_motor_ke,
-            "resistance_range": RIG.dr_motor_resistance,
-            "friction_range": RIG.dr_cart_friction,
-        },
+        params={"action_name": "motor", "accel_range": RIG.dr_max_accel, "friction_range": RIG.dr_pivot_friction},
     )
 
-    # --- interval: disturbance taps on the pole and cart ---
+    # --- interval: disturbance taps on the pole ---
     push = EventTerm(
-        func=mdp.push_cart_pole,
+        func=mdp.push_pole,
         mode="interval",
         interval_range_s=RIG.push_interval_s,
-        params={"pole_vel": RIG.push_pole_vel, "cart_vel": RIG.push_cart_vel},
+        params={"pole_vel": RIG.push_pole_vel},
     )
 
     # --- reset: initial state ---

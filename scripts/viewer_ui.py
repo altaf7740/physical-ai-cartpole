@@ -16,16 +16,16 @@ BLUE, ORANGE, GREY = 0xFFFFCC66, 0xFF3399FF, 0xFFBBBBBB  # omni.ui colours are 0
 
 class SignalPanel:
     def __init__(self, rig):
-        v_max = rig.supply_voltage / rig.motor_ke * rig.pulley_radius  # [m/s] no-load cart speed
+        v_max = rig.max_speed
         # (key, section, title, unit, plot range +-, colour)
         self._rows = [
-            ("x", "Policy inputs (measured: noisy + delayed)", "cart position", "m", rig.cart_limit, BLUE),
+            ("x", "Policy inputs (as the Pi estimates them)", "cart position", "m", rig.cart_limit, BLUE),
             ("x_dot", None, "cart velocity", "m/s", 1.2 * v_max, BLUE),
             ("theta", None, "pole angle", "rad", rig.max_pole_angle, BLUE),
             ("theta_dot", None, "pole angular velocity", "rad/s", 3.0, BLUE),
-            ("action", "Policy output", "action (PWM duty)", "-1..1", 1.0, ORANGE),
-            ("voltage", "Applied to the motor (after action delay)", "motor voltage", "V", rig.supply_voltage, ORANGE),
-            ("force", None, "cart force (belt - friction)", "N", rig.max_force, ORANGE),
+            ("action", "Policy output", "action (cart accel / max_accel)", "-1..1", 1.0, ORANGE),
+            ("v_cmd", "Stepper", "speed command at the Pico (after delay)", "m/s", v_max, ORANGE),
+            ("v_step", None, "stepper speed (Pico ramp)", "m/s", v_max, ORANGE),
         ]
         self._data = {key: [0.0] * HISTORY for key, *_ in self._rows}
         self._labels, self._plots = {}, {}
@@ -52,7 +52,7 @@ class SignalPanel:
                                 style={"color": colour, "background_color": 0xFF202020},
                             )
 
-    def update(self, meas, true, action: float, voltage: float, force: float, speed: float):
+    def update(self, meas, true, action: float, v_cmd: float, v_step: float, speed: float):
         """meas / true: [x, x_dot, theta, theta_dot] in m, m/s, rad, rad/s; speed: sim time / wall time."""
         self._speed.text = f"sim speed: {speed:.2f}x real time"
         texts = {
@@ -61,11 +61,11 @@ class SignalPanel:
             "theta": f"{meas[2]:+.4f} = {math.degrees(meas[2]):+.1f}°   (true {true[2]:+.4f})",
             "theta_dot": f"{meas[3]:+.3f}   (true {true[3]:+.3f})",
             "action": f"{action:+.3f}",
-            "voltage": f"{voltage:+.2f}",
-            "force": f"{force:+.2f}",
+            "v_cmd": f"{v_cmd:+.3f}",
+            "v_step": f"{v_step:+.3f}",
         }
         values = dict(zip(("x", "x_dot", "theta", "theta_dot"), meas))
-        values.update(action=action, voltage=voltage, force=force)
+        values.update(action=action, v_cmd=v_cmd, v_step=v_step)
         for key, text in texts.items():
             d = self._data[key]
             d.pop(0)
@@ -81,7 +81,6 @@ class KeyTaps:
     """Viewer keyboard disturbances, applied to every env (click the viewer window first so it has focus).
 
     LEFT / RIGHT  tap the pole toward -x / +x     (pole angular velocity -/+ rig.push_pole_vel * strength)
-    A / D         bump the cart toward -x / +x    (cart velocity -/+ 3 * rig.push_cart_vel * strength)
     UP / DOWN     stronger / weaker (x1.25 per press)
     R             reset request (used by the plain Isaac Sim player)
     (numpad 4 / 6 / 8 / 2 work as the arrows)
@@ -115,8 +114,8 @@ class KeyTaps:
             self.strength *= 1.25 if name == "UP" else 0.8
             print(f"[TAP] strength x{self.strength:.2f} (pole tap {self.rig.push_pole_vel * self.strength:.2f} rad/s)")
             return True
-        pole, cart = self.rig.push_pole_vel * self.strength, 3 * self.rig.push_cart_vel * self.strength
-        tap = {"LEFT": (0.0, -pole), "RIGHT": (0.0, pole), "A": (-cart, 0.0), "D": (cart, 0.0)}.get(name)
+        pole = self.rig.push_pole_vel * self.strength
+        tap = {"LEFT": (0.0, -pole), "RIGHT": (0.0, pole)}.get(name)
         if tap is not None:
             self._pending.append(tap)
             print(f"[TAP] {name}: cart {tap[0]:+.2f} m/s, pole {tap[1]:+.2f} rad/s")

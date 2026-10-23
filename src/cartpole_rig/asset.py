@@ -40,11 +40,12 @@ CARTPOLE_RIG_CFG = ArticulationCfg(
         pos=(0.0, 0.0, 0.3), joint_pos={"cart": 0.0, "pole": 0.0, ".*_pulley": 0.0}
     ),
     actuators={
-        # effort-controlled: DCMotorAction writes the belt force. Armature = motor + pulley inertia through the belt.
+        # the stepper: a stiff velocity drive, target = stepper speed (set by StepperAction every physics step)
         "cart": ImplicitActuatorCfg(
-            joint_names_expr=["cart"], effort_limit_sim=100.0, stiffness=0.0, damping=0.0, armature=RIG.reflected_mass
+            joint_names_expr=["cart"], effort_limit_sim=200.0, stiffness=0.0, damping=RIG.cart_drive_damping
         ),
-        # passive pivot: zero-velocity-target damping == viscous bearing friction
+        # passive pivot: zero-velocity-target damping == viscous bearing friction; StepperAction adds the Coulomb
+        # friction as an effort
         "pole": ImplicitActuatorCfg(
             joint_names_expr=["pole"], effort_limit_sim=100.0, stiffness=0.0, damping=RIG.pivot_viscous
         ),

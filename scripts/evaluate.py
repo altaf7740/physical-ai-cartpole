@@ -39,22 +39,19 @@ def episode_params(env) -> dict[str, torch.Tensor]:
     motor = env.action_manager.get_term("motor")
     # the observation manager has no public accessor for a term instance in Isaac Lab 3.0
     obs_term = env.observation_manager._group_obs_class_term_cfgs["policy"][0].func
-    j = {n: i for i, n in enumerate(robot.joint_names)}
     b = {n: i for i, n in enumerate(robot.body_names)}
-    return {
-        "cart_mass": robot.data.body_mass.torch[:, b["cart"]] / RIG.cart_mass,
+    out = {
         "pole_mass": robot.data.body_mass.torch[:, b["pole"]] / RIG.pole_mass,
         "pole_com": robot.data.body_com_pos_b.torch[:, b["pole"], 2] / RIG.pole_com,
-        "motor_inertia": robot.data.joint_armature.torch[:, j["cart"]] / RIG.reflected_mass,
-        "pivot_friction": robot.data.joint_damping.torch[:, j["pole"]] / RIG.pivot_viscous,
-        "kt": motor.kt[:, 0] / RIG.motor_kt,
-        "ke": motor.ke[:, 0] / RIG.motor_ke,
-        "resistance": motor.resistance[:, 0] / RIG.motor_resistance,
-        "cart_friction": motor.viscous[:, 0] / RIG.cart_viscous,
+        "pivot_friction": motor.friction_scale[:, 0],
+        "max_accel": motor.accel_scale[:, 0],
+        "angle_offset_deg": torch.rad2deg(obs_term.offset),
         "obs_noise": obs_term.noise_scale[:, 0],
-        "obs_delay": obs_term.delay.time_lags.float(),
         "action_delay": motor._delay.time_lags.float(),
     }
+    if obs_term.delay is not None:
+        out["obs_delay"] = obs_term.delay.time_lags.float()
+    return out
 
 
 def main():
@@ -67,10 +64,7 @@ def main():
     if args_cli.push_scale == 0:
         env_cfg.events.push = None
     else:
-        env_cfg.events.push.params = {
-            "pole_vel": RIG.push_pole_vel * args_cli.push_scale,
-            "cart_vel": RIG.push_cart_vel * args_cli.push_scale,
-        }
+        env_cfg.events.push.params = {"pole_vel": RIG.push_pole_vel * args_cli.push_scale}
 
     with launch_simulation(env_cfg, args_cli):
         log_root = os.path.abspath(os.path.join("logs", "rsl_rl", agent_cfg.experiment_name))
@@ -117,7 +111,7 @@ def main():
         if args_cli.push_scale:
             print(
                 f"taps every {RIG.push_interval_s[0]:.0f}-{RIG.push_interval_s[1]:.0f} s: pole +-"
-                f"{RIG.push_pole_vel * args_cli.push_scale:.2f} rad/s, cart +-{RIG.push_cart_vel * args_cli.push_scale:.2f} m/s"
+                f"{RIG.push_pole_vel * args_cli.push_scale:.2f} rad/s"
             )
         print(f"balanced full episode: {int(ok.sum())}/{n} ({100 * ok.float().mean():.2f} %)")
         print(f"pole fell: {int((outcome == 1).sum())}   left rail: {int((outcome == 2).sum())}")

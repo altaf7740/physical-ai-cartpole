@@ -186,6 +186,7 @@ class HardwareService:
             "model_path": cfg.policy.model_path,
             "action_type": cfg.policy.action_type,
             "obs_order": list(cfg.policy.obs_order),
+            "obs_scale": list(cfg.policy.obs_scale),
             "jog_timeout_s": cfg.ui.jog_timeout_s,
         }
 

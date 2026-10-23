@@ -37,6 +37,7 @@ class BalanceController:
 
     def __init__(self, cfg: Config, policy: Policy):
         self.obs_order = cfg.policy.obs_order
+        self.obs_scale = cfg.policy.obs_scale
         self.policy = policy
         self.safety = SafetyMonitor(cfg.safety)
         self.converter = ActionConverter(cfg, effective_max_velocity(cfg))
@@ -54,7 +55,7 @@ class BalanceController:
         mode = self.safety.missed_read() if state is None else self.safety.update(state, limit_hit)
         self.action = 0.0
         if mode is Mode.BALANCING and state is not None:
-            self.action = float(self.policy.act(build_observation(state, self.obs_order))[0])
+            self.action = float(self.policy.act(build_observation(state, self.obs_order, self.obs_scale))[0])
             self.step_rate = self.converter.command(self.action, dt)
         elif mode is Mode.BALANCING:
             pass  # a dropped reply: hold the last command until the safety monitor faults

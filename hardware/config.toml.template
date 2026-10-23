@@ -9,8 +9,8 @@ startup_delay_s = 2.0        # wait after opening the port (Pico may reboot)
 
 [hardware]
 encoder_cpr = 2400           # 600 PPR x 4 quadrature edges
-steps_per_meter = 80000      # TB6600 at 1/16 = 3200 steps/rev, 20T GT2 pulley = 0.04 m/rev
-max_step_rate = 20000        # steps/s, the TB6600 input limit (= 0.25 m/s at 1/16)
+steps_per_meter = 40000      # TB6600 at 1/8 = 1600 steps/rev, 20T GT2 pulley = 0.04 m/rev
+max_step_rate = 20000        # steps/s, the TB6600 input limit (= 0.5 m/s at 1/8)
 encoder_sign = 1             # flip to -1 if +theta is the opposite way to the sim
 cart_sign = 1                # flip to -1 if +x is the opposite way to the sim
 angle_zero = "down"          # where the pole is when counters reset: "down" or "upright"
@@ -27,6 +27,8 @@ rate_hz = 60                 # MUST equal the training control rate: 1 / (sim.dt
 # Cartpole uses joint_pos_rel then joint_vel_rel = [cart_pos, pole_pos, cart_vel, pole_vel].
 # The direct env (Isaac-Cartpole-Direct-v0) uses [pole_pos, pole_vel, cart_pos, cart_vel].
 obs_order = ["cart_pos", "pole_pos", "cart_vel", "pole_vel"]
+# Optional factor per obs_order entry (the env's observation scale); [] = feed the SI values unscaled.
+obs_scale = []
 action_type = "velocity"     # "velocity" (m/s), "acceleration" (m/s^2) or "force" (N)
 action_scale = 1.0           # the env's action scale (raw action * scale = physical units)
 action_clip = 1.0            # clip the raw policy output to +/- this before scaling

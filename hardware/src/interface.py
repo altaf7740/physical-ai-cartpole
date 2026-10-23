@@ -8,9 +8,12 @@ from config import Config
 from state import CartPoleState
 
 
-def build_observation(state: CartPoleState, obs_order: tuple[str, ...]) -> np.ndarray:
+def build_observation(state: CartPoleState, obs_order: tuple[str, ...],
+                      obs_scale: tuple[float, ...] = ()) -> np.ndarray:
+    """State in obs_order, times obs_scale (the training env's observation scale) when given."""
     values = state.as_dict()
-    return np.array([values[k] for k in obs_order], dtype=np.float32)
+    obs = np.array([values[k] for k in obs_order], dtype=np.float32)
+    return obs * np.asarray(obs_scale, dtype=np.float32) if obs_scale else obs
 
 
 def clamp(value: float, limit: float) -> float:

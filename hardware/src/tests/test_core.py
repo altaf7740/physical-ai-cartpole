@@ -11,7 +11,7 @@ import numpy as np
 import time
 
 from calibration import TrackCalibrator, load_calibration, save_calibration
-from config import Config, ConfigError, effective_max_velocity, load_config
+from config import Config, ConfigError, _validate, effective_max_velocity, load_config
 from fake_pico import FakePico
 from hardware_service import CommandError, HardwareService
 from interface import ActionConverter, build_observation
@@ -31,7 +31,7 @@ class TestConfig(unittest.TestCase):
     def test_template_loads(self):
         cfg = template_config()
         self.assertTrue(Path(cfg.policy.model_path).is_absolute())
-        self.assertAlmostEqual(effective_max_velocity(cfg), 0.25)  # max_step_rate / steps_per_meter < max_cart_vel_mps
+        self.assertAlmostEqual(effective_max_velocity(cfg), 0.4)  # max_cart_vel_mps < max_step_rate / steps_per_meter
 
     def test_unknown_key_rejected(self):
         with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as f:
@@ -84,12 +84,24 @@ class TestInterface(unittest.TestCase):
             build_observation(s, ("pole_pos", "pole_vel", "cart_pos", "cart_vel")), [2, 4, 1, 3]
         )
 
+    def test_observation_scale(self):
+        s = CartPoleState(cart_pos=1, pole_pos=2, cart_vel=3, pole_vel=4)
+        np.testing.assert_allclose(
+            build_observation(s, ("cart_pos", "cart_vel", "pole_pos", "pole_vel"), (2.0, 0.5, 10.0, 1.0)), [2, 1.5, 20, 4]
+        )
+
+    def test_obs_scale_length_checked(self):
+        cfg = template_config()
+        with self.assertRaises(ConfigError):
+            _validate(replace(cfg, policy=replace(cfg.policy, obs_scale=(1.0, 2.0))))
+
     def test_velocity_action_clamped(self):
         cfg = template_config()
         conv = ActionConverter(cfg, effective_max_velocity(cfg))
-        spm, cap = cfg.hardware.steps_per_meter, cfg.hardware.max_step_rate
+        spm = cfg.hardware.steps_per_meter
+        cap = min(cfg.hardware.max_step_rate, round(effective_max_velocity(cfg) * spm))
         self.assertEqual(conv.command(0.1, 0.01), round(0.1 * spm))
-        self.assertEqual(conv.command(5.0, 0.01), cap)  # clipped to 1.0 m/s, then capped by the step rate
+        self.assertEqual(conv.command(5.0, 0.01), cap)  # clipped to 1.0 m/s, then capped by the speed limit
         self.assertEqual(conv.command(-5.0, 0.01), -cap)
 
     def test_acceleration_integrates(self):

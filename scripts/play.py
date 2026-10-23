@@ -74,9 +74,21 @@ def policy_io(rig) -> dict:
         "obs_formula": "policy_input[i] = raw[i] * obs_scale[i]; no offset, no clipping, no running normalizer",
         "conventions": "x=0 rail centre, +x = direction of travel for +action; theta=0 upright, "
         "theta>0 when the pole leans toward +x",
-        "action": "a = clamp(policy(obs)[0], -1, 1); PWM duty = a, signed; motor voltage = a * supply_voltage",
-        "supply_voltage": rig.supply_voltage,
-        "deadband": rig.deadband,
+        "action": "a = clamp(policy(obs)[0], -1, 1); cart acceleration = a * max_accel; the Pi integrates it: "
+        "v_cmd = clip(v_cmd + a * max_accel * dt, +-max_speed), step rate = v_cmd * steps_per_meter",
+        "pi_config": {  # hardware/config.toml [policy] / [safety] values this policy was trained for
+            "obs_order": ["cart_pos", "cart_vel", "pole_pos", "pole_vel"],
+            "obs_scale": list(rig.obs_scale),
+            "action_type": "acceleration",
+            "action_scale": rig.max_accel,
+            "action_clip": 1.0,
+            "rate_hz": rig.control_hz,
+            "max_cart_vel_mps": rig.max_speed,
+            "steps_per_meter": rig.steps_per_meter,
+            "velocity_alpha": rig.velocity_alpha,
+        },
+        "max_accel": rig.max_accel,
+        "max_speed": rig.max_speed,
         "control_hz": rig.control_hz,
         "cart_limit_m": rig.cart_limit,
         "max_pole_angle_rad": rig.max_pole_angle,
@@ -173,8 +185,8 @@ def main():
                     raw[0].tolist(),
                     true,
                     actions[0, 0].item(),
-                    motor.processed_actions[0, 0].item() * RIG.supply_voltage,
-                    motor.force[0, 0].item(),
+                    motor.target[0, 0].item(),
+                    motor.speed[0, 0].item(),
                     speed,
                 )
             ep_len += 1

@@ -20,8 +20,9 @@ Pico wiring (`src/pico_main.py`, flashed with `make flash` on the Pi):
 | GP14 / GP15 | encoder A / B (internal pull-ups on; index C/Z not connected) |
 | GP13 / GP1 | left / right limit switch, COM + NC to GND (internal pull-up; pressed or broken wire = high) |
 
-The TB6600 DIP switches are on 1/16 microstepping (3200 steps/rev), so `steps_per_meter = 80000`;
-change both together. The Pico never steps toward a pressed limit switch (moving away is allowed), and
+The TB6600 DIP switches are on 1/8 microstepping (1600 steps/rev: S1 off, S2 on, S3 off), so
+`steps_per_meter = 40000` and the 20 kHz step limit is 0.5 m/s; change both together, scale `START_HZ` and
+`ACCEL` in `pico_main.py` (they are in steps), and run Calibrate track again. The Pico never steps toward a pressed limit switch (moving away is allowed), and
 negative steps must move the cart toward the left switch.
 
 ## Layout
@@ -127,14 +128,15 @@ These values in `config.toml` must match the Isaac Lab environment exactly:
 | Key | What it must equal |
 |---|---|
 | `policy.rate_hz` | `1 / (sim.dt * decimation)`. The Isaac Lab default is 1/120 × 2 = 60 Hz. |
-| `policy.obs_order` | The order of the observation vector in training. |
+| `policy.obs_order` / `obs_scale` | The order of the observation vector in training, and its scale. |
 | `policy.action_type` / `action_scale` | What the action means physically, and its scale. |
+| `safety.max_cart_vel_mps` | The speed the policy was trained with (`RIG.max_speed`). |
 
-The default Isaac Lab cartpole action is a **force**, but a stepper motor follows a speed command.
-`action_type = "force"` only approximates force as `a = F / force_mass_kg`.
-For a reliable transfer, train with an action the stepper can follow: cart **velocity** or **acceleration**.
-Also cap it to the real speed limit (`max_step_rate / steps_per_meter`, 0.4 m/s by default).
-The real loop has **one control period of action delay**, so model that in the sim too.
+This repo's policy (`../policy/`, trained by `../src/cartpole_rig`) outputs a cart **acceleration**
+(`action_type = "acceleration"`, `action_scale = RIG.max_accel`); the Pi integrates it into the speed command,
+and the env models exactly that, the one control period of action delay, the Pico ramp, and this estimator
+(step / encoder quantization, `velocity_alpha` filter). `../policy/policy_io.json` lists the `pi_config`
+values a policy was trained for; `config.toml` must match them.
 
 ## Safety
 

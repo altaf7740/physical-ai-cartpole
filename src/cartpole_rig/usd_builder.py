@@ -1,15 +1,15 @@
 """Builds the cart-pole rig USD from a RigCfg. Uses only ``pxr`` (no Isaac Lab), so plain Isaac Sim can use it too.
 
 Front view (-y toward the viewer, so +x is to the right; +z up):
-  - rail (fixed to the world): 2020 extrusion + MGN12 rail, olive end blocks, gear motor on the left block
+  - rail (fixed to the world): 2020 extrusion + MGN12 rail, olive end blocks, NEMA17 stepper on the left block
   - joint ``cart`` (prismatic X): carriage, plate, belt clamp, encoder bracket + encoder housing
   - joint ``pole`` (revolute Y, on the encoder shaft): steel rod, built pointing +Z so angle 0 is upright
   - joints ``motor_pulley`` / ``idler_pulley`` (revolute Y): GT2 pulleys; the belt loop runs between them
     behind the rail and its top strand is clamped to the carriage
 
-The belt is modelled as rigid: the motor torque reaches the carriage as force = torque / r and the motor + pulley
-inertia sits on the ``cart`` joint as armature J / r^2. The pulley links are visual (near-zero inertia) and are
-spun at belt speed by the controller. The armature and the pole / pulley drive damping are written into the USD
+The belt is modelled as rigid and the stepper as exact (no lost steps): the ``cart`` joint has a stiff linear
+velocity drive that the controller points at the stepper speed. The pulley links are visual (near-zero inertia)
+and are spun at belt speed by the controller. The cart / pole / pulley drive damping is written into the USD
 (Isaac Lab sets the same values again from its actuator config). No colliders: nothing touches anything.
 
 Import this only after Kit has started (importing ``pxr`` before Kit breaks Kit's own USD libraries).
@@ -30,7 +30,7 @@ OLIVE, BLUE, RED = (0.5, 0.5, 0.0), (0.2, 0.45, 0.8), (0.85, 0.1, 0.1)
 
 
 def write_usd(rig, path: str) -> str:
-    from pxr import Gf, PhysxSchema, Usd, UsdGeom, UsdPhysics
+    from pxr import Gf, Usd, UsdGeom, UsdPhysics
 
     def box(path, size, pos, rgb):
         c = UsdGeom.Cube.Define(stage, path)
@@ -97,7 +97,7 @@ def write_usd(rig, path: str) -> str:
         box(f"/cartpole/rail/{name}", (0.04, 0.05, 0.07), (sx * px, -0.01, -0.02), OLIVE)
     box("/cartpole/rail/belt_top", (2 * px, 0.006, 0.0015), (0, BELT_Y, PULLEY_Z + r), BLACK)
     box("/cartpole/rail/belt_bottom", (2 * px, 0.006, 0.0015), (0, BELT_Y, PULLEY_Z - r), BLACK)
-    cyl("/cartpole/rail/motor", 0.0125, 0.05, (-px, 0.06, PULLEY_Z), DARK)  # 25 mm gear motor behind the block
+    box("/cartpole/rail/motor", (0.042, 0.04, 0.042), (-px, 0.065, PULLEY_Z), DARK)  # NEMA17 behind the block
     cyl("/cartpole/rail/motor_shaft", 0.002, 0.03, (-px, 0.035, PULLEY_Z), STEEL)
     cyl("/cartpole/rail/idler_axle", 0.002, 0.03, (px, 0.02, PULLEY_Z), STEEL)
 
@@ -135,7 +135,10 @@ def write_usd(rig, path: str) -> str:
     slider = joint(UsdPhysics.PrismaticJoint, "cart", rail, cart, (0, 0, 0), "X")
     slider.CreateLowerLimitAttr(-stop)
     slider.CreateUpperLimitAttr(stop)
-    PhysxSchema.PhysxJointAPI.Apply(slider.GetPrim()).CreateArmatureAttr(rig.reflected_mass)  # motor + pulley
+    drive = UsdPhysics.DriveAPI.Apply(slider.GetPrim(), "linear")  # velocity drive = the stepper
+    drive.CreateTypeAttr("force")
+    drive.CreateStiffnessAttr(0.0)
+    drive.CreateDampingAttr(rig.cart_drive_damping)
     damping_drive(joint(UsdPhysics.RevoluteJoint, "pole", cart, pole, (0, SHAFT_Y, SHAFT_Z), "Y"), rig.pivot_viscous)
     for name, sx in (("motor_pulley", -1), ("idler_pulley", 1)):
         j = joint(UsdPhysics.RevoluteJoint, name, rail, pulleys[name], (sx * px, BELT_Y, PULLEY_Z), "Y")
