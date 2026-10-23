@@ -12,6 +12,7 @@ from collections import deque
 from collections.abc import Callable
 from pathlib import Path
 
+from calibration import TrackCalibrator, load_calibration, save_calibration
 from config import Config, effective_max_velocity
 from controller import BalanceController, fixed_rate
 from interface import ActionConverter, clamp
@@ -20,7 +21,7 @@ from pico_link import Telemetry
 from policy import Policy, load_policy
 from state import CartPoleState, StateEstimator
 
-MANUAL, DRY_RUN, LIVE = "manual", "dry-run", "live"
+MANUAL, DRY_RUN, LIVE, CALIBRATING = "manual", "dry-run", "live", "calibrating"
 
 
 class CommandError(Exception):
@@ -53,6 +54,12 @@ class HardwareService:
         self._pending: set[str] = set()
         self._recorder: RunLogger | None = None
         self._rate_hz, self._late_ticks, self._missed = 0.0, 0, 0
+        self._estimator: StateEstimator | None = None
+        self._calibrator: TrackCalibrator | None = None
+        self._cal_message = ""
+        self._track_file = Path(cfg.logging.directory) / "track_calibration.json"
+        self._track = load_calibration(self._track_file)  # last measured travel, kept across restarts
+        self._homed = False  # x = 0 is the track centre (lost when the Pico counters reset)
 
     # ---- lifecycle ---------------------------------------------------------
 
@@ -81,8 +88,11 @@ class HardwareService:
             raise CommandError(f"Pico is {self._link_state}")
 
     def _back_to_manual(self) -> None:
+        if self._calibrator is not None:
+            self._cal_message = "calibration stopped"
         self._control = MANUAL
         self._controller = None
+        self._calibrator = None
         self._jog_velocity = 0.0
 
     def estop(self) -> None:
@@ -104,9 +114,28 @@ class HardwareService:
             self._jog_velocity = clamp(velocity, self.max_velocity)
             self._jog_deadline = time.monotonic() + self.cfg.ui.jog_timeout_s
 
+    def start_calibration(self, speed_mps: float) -> None:
+        """Home on both limit switches twice, measure the travel, park in the middle (x = 0)."""
+        with self._lock:
+            self._require_connected()
+            if self._control != MANUAL:
+                raise CommandError("stop the policy before calibrating")
+            speed = min(abs(speed_mps), self.max_velocity)
+            rate = min(round(speed * self.cfg.hardware.steps_per_meter), self.cfg.hardware.max_step_rate)
+            if rate < 100:
+                raise CommandError("calibration speed too low")
+            # Long enough for a 1.5 m track at this speed before a missing switch aborts the run.
+            self._calibrator = TrackCalibrator(rate, leg_timeout_s=max(30.0, 1.5 / speed))
+            self._control = CALIBRATING
+            self._jog_velocity = 0.0
+            self._homed = False
+            self._cal_message = self._calibrator.describe()
+
     def start_policy(self, live: bool) -> None:
         with self._lock:
             self._require_connected()
+            if self._control == CALIBRATING:
+                raise CommandError("wait for the calibration to finish")
         if self._policy is None:
             self._policy = load_policy(self.cfg.policy)  # slow-ish; keep it outside the lock
         with self._lock:
@@ -147,6 +176,7 @@ class HardwareService:
             "max_velocity": self.max_velocity,
             "max_step_rate": cfg.hardware.max_step_rate,
             "angle_zero": cfg.hardware.angle_zero,
+            "cart_sign": cfg.hardware.cart_sign,
             "model_path": cfg.policy.model_path,
             "action_type": cfg.policy.action_type,
             "obs_order": list(cfg.policy.obs_order),
@@ -164,7 +194,24 @@ class HardwareService:
                 "late_ticks": self._late_ticks,
                 "missed_reads": self._missed,
                 "model_exists": Path(self.cfg.policy.model_path).exists(),
+                "calibration": self._cal_message,
+                "track": self._track_status(),
             }
+
+    def _track_status(self) -> dict | None:
+        if self._track is None:
+            return None
+        spm = self.cfg.hardware.steps_per_meter
+        return {
+            "homed": self._homed,
+            "travel_steps": self._track.travel_steps,
+            "spread_steps": self._track.spread_steps,
+            "passes": list(self._track.passes),
+            "length_m": round(self._track.travel_steps / spm, 4),
+            "half_m": round(self._track.half_length_m(spm), 4),
+            "steps_per_meter": spm,
+            "measured_at": self._track.measured_at,
+        }
 
     def samples_since(self, seq: int, max_count: int) -> tuple[list[dict], int]:
         with self._lock:
@@ -186,11 +233,13 @@ class HardwareService:
         except Exception as e:  # port missing, permission denied, ...
             self._finish(link, f"{type(e).__name__}: {e}")
             return
+        estimator = StateEstimator(self.cfg.hardware, self.cfg.estimator)
         with self._lock:
             self._link_state = "connected"
+            self._estimator = estimator
+            self._homed = False  # the Pico counters were just reset
 
-        estimator = StateEstimator(self.cfg.hardware, self.cfg.estimator)
-        step_rate, error = 0, ""
+        step_rate, error, tel = 0, "", None
         try:
             for dt in fixed_rate(self.cfg.policy.rate_hz):
                 if self._stop.is_set():
@@ -201,8 +250,13 @@ class HardwareService:
                     link.place_upright()
                     estimator.reset()  # the angle teleports; don't read it as a huge spin
                 if "reset" in pending:
-                    link.reset_counters()
-                    estimator.reset()
+                    with self._lock:
+                        homed = self._homed
+                    if homed and tel is not None:
+                        estimator.set_origins(encoder_ticks=tel.encoder_ticks)  # zero the pole only; x stays centred
+                    else:
+                        link.reset_counters()
+                        estimator.set_origins(cart_steps=0, encoder_ticks=0)
                     with self._lock:
                         if self._controller is not None:
                             self._controller.reset()
@@ -231,11 +285,34 @@ class HardwareService:
             return 0
         return self._jog_converter.velocity_to_step_rate(v)
 
+    def _calibration_rate(self, tel: Telemetry | None, dt: float) -> int:
+        """One calibration tick. Called with the lock held."""
+        cal = self._calibrator
+        if tel is None:
+            return 0  # wait for the next good reading
+        send = cal.step(tel.cart_steps, tel.limits, dt)
+        self._cal_message = cal.describe()
+        if not cal.finished:
+            return send
+        if cal.phase == "done":
+            r = cal.result
+            self._estimator.set_origins(cart_steps=r.centre_steps)
+            self._track, self._homed = r, True
+            save_calibration(self._track_file, r)
+            length = r.travel_steps / self.cfg.hardware.steps_per_meter
+            self._cal_message = (f"travel {r.travel_steps} steps = {length:.3f} m, passes {list(r.passes)} "
+                                 f"(spread {r.spread_steps}); x = 0 is now the centre")
+        self._calibrator = None
+        self._control = MANUAL
+        return 0
+
     def _tick(self, tel: Telemetry | None, state: CartPoleState | None, dt: float) -> int:
         """Decide the next step rate and record a sample. Called with the lock held."""
         limit_hit = tel is not None and tel.limit_hit
         safety, reason, action, policy_rate = "", "", 0.0, None
-        if self._controller is None:
+        if self._calibrator is not None:
+            send = self._calibration_rate(tel, dt)
+        elif self._controller is None:
             send = self._manual_rate(state)
         else:
             mode = self._controller.step(state, limit_hit, dt)
@@ -260,6 +337,7 @@ class HardwareService:
             "ticks": tel.encoder_ticks if tel else None,
             "steps": tel.cart_steps if tel else None,
             "limit": limit_hit,
+            "limits": tel.limits if tel else 0,
             "x": _r(state.cart_pos) if state else None,
             "theta": _r(state.pole_pos) if state else None,
             "dx": _r(state.cart_vel) if state else None,

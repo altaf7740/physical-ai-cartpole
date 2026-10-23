@@ -115,7 +115,7 @@
       <p class="hint">Drawing: +θ leans toward +x. Compare with the sim's sign convention.</p>
       <p class="hint">x and ẋ are counted from the steps the Pico commands. The stepper has no position
         sensor, so pushing the cart by hand doesn't change them, and skipped steps make x drift.
-        After moving the cart by hand, re-centre it and press <b>Reset counters</b>.</p>
+        After moving the cart by hand, run <b>Home &amp; measure track</b> again.</p>
     </div>
 
     <div class="card">
@@ -129,9 +129,14 @@
       <p class="hint">Hold to move, release to stop. Keys: hold <kbd>←</kbd> <kbd>→</kbd>, <kbd>Space</kbd>/<kbd>Esc</kbd> = E-stop.
         The limit switches stop the cart; it can always move away from a pressed one.</p>
       <div class="row" style="margin-top:10px">
+        <button id="btn-home" class="grow">Home &amp; measure track</button>
         <button id="btn-reset" class="grow">Reset counters (zero x &amp; θ)</button>
       </div>
       <p class="hint" id="reset-hint"></p>
+      <p class="hint mono" id="cal-text" style="white-space: pre-line"></p>
+      <p class="hint">Homing drives to the left switch, then the right one, twice, at the speed above, then parks in
+        the middle and makes that x = 0. The travel between the switches is the real track length; if your tape
+        measure disagrees with it, <code>steps_per_meter</code> is wrong. Once homed, <b>Reset counters</b> zeroes θ only.</p>
     </div>
 
     <div class="card">
@@ -195,6 +200,7 @@ const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyV
 const DEG = 180 / Math.PI;
 
 let info = null, status = null, online = false;
+const homed = () => !!(status && status.track && status.track.homed);
 const samples = [];
 
 // ---------- server ----------
@@ -330,18 +336,28 @@ class RigView extends Canvas2D {
   draw(s) {
     const { ctx, w, h } = this;
     ctx.clearRect(0, 0, w, h);
-    // No soft limit to draw: show +/-0.3 m, widened whenever the cart goes further.
-    this.half = Math.max(this.half || 0.3, Math.abs(s && s.ok ? s.x : 0) * 1.15);
-    const half = this.half, edge = +(half / 1.15).toFixed(2);
+    // Once homed, draw the measured rail with the switches at its ends; before that x = 0 is
+    // just the reset position, so show +/-0.3 m, widened whenever the cart goes further.
+    const tr = homed() ? status.track : null;
+    if (tr) this.half = tr.half_m * 1.08;
+    else this.half = Math.max(this.half || 0.3, Math.abs(s && s.ok ? s.x : 0) * 1.15);
+    const half = this.half, edge = tr ? tr.half_m : +(half / 1.15).toFixed(2);
     const sx = (x) => w / 2 + (x / half) * (w / 2 - 20), railY = h / 2 + 6;
 
     ctx.strokeStyle = cssVar("--line"); ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(10, railY); ctx.lineTo(w - 10, railY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tr ? sx(-edge) : 10, railY); ctx.lineTo(tr ? sx(edge) : w - 10, railY); ctx.stroke();
+    if (tr) {  // limit switches: the left one is at -x unless cart_sign flips it
+      const lim = s ? s.limits || 0 : 0, leftAt = info && info.cart_sign < 0 ? 1 : -1;
+      for (const [bit, side] of [[1, leftAt], [2, -leftAt]]) {
+        ctx.fillStyle = cssVar(lim & bit ? "--bad" : "--muted");
+        ctx.fillRect(sx(side * edge) - (side < 0 ? 6 : 0), railY - 10, 6, 20);
+      }
+    }
     ctx.fillStyle = cssVar("--muted"); ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-    ctx.fillText("x = 0", sx(0), h - 2);
-    ctx.fillText(`+${edge} m`, sx(edge), h - 2);
-    ctx.fillText(`−${edge} m`, sx(-edge), h - 2);
+    ctx.fillText(tr ? "x = 0 (centre)" : "x = 0", sx(0), h - 2);
+    ctx.fillText(`+${edge.toFixed(3)} m`, sx(edge), h - 2);
+    ctx.fillText(`−${edge.toFixed(3)} m`, sx(-edge), h - 2);
 
     if (!s || !s.ok) {
       ctx.fillText("no data", w / 2, 10);
@@ -396,7 +412,8 @@ function renderReadouts(s) {
   $("ro-steps").textContent = ok ? s.steps : "—";
   $("ro-cmd").textContent = s ? s.cmd : "—";
   $("ro-limit").classList.toggle("hit", !!(s && s.limit));
-  $("ro-limit-text").textContent = s ? (s.limit ? "HIT" : "clear") : "—";
+  const lim = s ? s.limits || 0 : 0;
+  $("ro-limit-text").textContent = !s ? "—" : !s.limit ? "clear" : lim === 3 ? "BOTH" : lim === 2 ? "RIGHT" : "LEFT";
 }
 
 function setPill(id, text, cls) {
@@ -429,7 +446,14 @@ function renderStatus() {
   const manual = ctl === "manual", policyOn = !manual;
   $("btn-connect").disabled = connected || link === "connecting";
   $("btn-disconnect").disabled = !connected;
-  $("btn-reset").disabled = !connected;
+  $("btn-reset").disabled = !connected || ctl === "calibrating";
+  $("btn-reset").textContent = homed() ? "Zero θ (pole hanging still)" : "Reset counters (zero x & θ)";
+  $("btn-home").disabled = !connected || !manual;
+  const tr = status.track;
+  $("cal-text").textContent = (status.calibration ? status.calibration + "\n" : "") + (tr
+    ? `Track: ${tr.travel_steps} steps = ${tr.length_m.toFixed(3)} m at ${tr.steps_per_meter} steps/m` +
+      ` (passes ${tr.passes.join(", ")}). ${tr.homed ? "Homed: x = 0 is the centre." : "Not homed since the last connect."}`
+    : "Track not measured yet.");
   $("jog-neg").disabled = $("jog-pos").disabled = !connected || !manual;
   $("btn-dry").disabled = !connected || ctl === "dry-run" || !status.model_exists;
   $("btn-live").disabled = !connected || ctl === "live" || !status.model_exists || !$("arm").checked;
@@ -501,6 +525,7 @@ $("estop").onclick = estop;
 $("btn-connect").onclick = () => api("connect");
 $("btn-disconnect").onclick = () => api("disconnect");
 $("btn-reset").onclick = () => api("reset");
+$("btn-home").onclick = () => api("calibrate", { speed: speed() });
 $("btn-dry").onclick = () => api("policy_start", { live: false });
 $("btn-live").onclick = async () => {
   const r = await api("policy_start", { live: true });

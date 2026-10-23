@@ -10,6 +10,7 @@ import numpy as np
 
 import time
 
+from calibration import TrackCalibrator, load_calibration, save_calibration
 from config import Config, ConfigError, effective_max_velocity, load_config
 from fake_pico import FakePico
 from hardware_service import CommandError, HardwareService
@@ -43,6 +44,9 @@ class TestPicoProtocol(unittest.TestCase):
     def test_parse(self):
         self.assertEqual(parse_telemetry("120,-35,0\r\n"), Telemetry(120, -35, False))
         self.assertEqual(parse_telemetry("1,2,1"), Telemetry(1, 2, True))
+        right = parse_telemetry("1,2,2")
+        self.assertEqual(right.limits, 2)
+        self.assertTrue(right.limit_hit)
         for bad in ("", "1,2", "a,b,c", "1,2,3,4"):
             self.assertIsNone(parse_telemetry(bad))
 
@@ -197,6 +201,60 @@ class TestHardwareService(unittest.TestCase):
         self.svc._jog_velocity, self.svc._jog_deadline = 0.1, time.monotonic() + 1
         beyond = CartPoleState(0.3, 0.0, 0.0, 0.0)
         self.assertEqual(self.svc._manual_rate(beyond), round(0.1 * self.cfg.hardware.steps_per_meter))
+
+
+
+def run_calibration(cal: TrackCalibrator, left: int, right: int, start: int = 0, dt: float = 1 / 60,
+                    max_ticks: int = 100_000) -> int:
+    """Simulated cart between two switches at raw steps `left` < `right`, moving at the commanded rate."""
+    steps, rate = float(start), 0
+    for _ in range(max_ticks):
+        steps = min(max(steps + rate * dt, left), right)  # the switches stop it, like the Pico
+        limits = (1 if steps <= left else 0) | (2 if steps >= right else 0)
+        rate = cal.step(round(steps), limits, dt)
+        if cal.finished:
+            return round(steps)
+    raise AssertionError("calibration did not finish")
+
+
+class TestCalibration(unittest.TestCase):
+    def test_measures_travel_and_parks_in_the_middle(self):
+        cal = TrackCalibrator(rate=2000)
+        end = run_calibration(cal, left=-3000, right=5000)
+        self.assertEqual(cal.phase, "done")
+        self.assertEqual(cal.result.travel_steps, 8000)
+        self.assertEqual(cal.result.passes, (8000, 8000))
+        self.assertEqual(cal.result.centre_steps, 1000)
+        self.assertLessEqual(abs(end - 1000), 40)
+
+    def test_starting_on_the_right_switch_is_not_a_left_hit(self):
+        cal = TrackCalibrator(rate=2000)
+        run_calibration(cal, left=-3000, right=5000, start=5000)
+        self.assertEqual(cal.result.travel_steps, 8000)
+
+    def test_missing_switch_fails(self):
+        cal = TrackCalibrator(rate=2000, leg_timeout_s=1.0)
+        run_calibration(cal, left=-10**9, right=5000)
+        self.assertEqual(cal.phase, "failed")
+        self.assertIn("left", cal.error)
+
+    def test_save_and_load(self):
+        cal = TrackCalibrator(rate=2000)
+        run_calibration(cal, left=-3000, right=5000)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "track.json"
+            save_calibration(path, cal.result)
+            self.assertEqual(load_calibration(path), cal.result)
+            self.assertIsNone(load_calibration(Path(d) / "missing.json"))
+
+    def test_homing_keeps_x_when_zeroing_the_pole(self):
+        cfg = template_config()
+        est = StateEstimator(cfg.hardware, cfg.estimator)
+        est.set_origins(cart_steps=1000)
+        est.set_origins(encoder_ticks=50)
+        s = est.update(Telemetry(50, 1000, 0), 0.01)
+        self.assertAlmostEqual(s.cart_pos, 0.0)
+        self.assertAlmostEqual(s.pole_pos, ticks_to_angle(0, cfg.hardware.encoder_cpr, angle_zero=cfg.hardware.angle_zero))
 
 
 if __name__ == "__main__":

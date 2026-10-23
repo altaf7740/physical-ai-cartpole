@@ -51,7 +51,19 @@ class StateEstimator:
     def __init__(self, hw: HardwareConfig, est: EstimatorConfig):
         self.hw = hw
         self.alpha = est.velocity_alpha
+        # Raw Pico counts that read as x = 0 / the angle_zero pose. The Pico's own counters
+        # start at 0 on "R"; homing moves the cart origin to the track centre, and zeroing
+        # the pole while homed moves only the angle origin, so x keeps its centre.
+        self.cart_origin_steps = 0
+        self.angle_origin_ticks = 0
         self.reset()
+
+    def set_origins(self, cart_steps: int | None = None, encoder_ticks: int | None = None) -> None:
+        if cart_steps is not None:
+            self.cart_origin_steps = cart_steps
+        if encoder_ticks is not None:
+            self.angle_origin_ticks = encoder_ticks
+        self.reset()  # the readings jump; don't read that as velocity
 
     def reset(self) -> None:
         self._prev_pos: float | None = None
@@ -60,8 +72,9 @@ class StateEstimator:
         self._pole_vel = 0.0
 
     def update(self, tel: Telemetry, dt: float) -> CartPoleState:
-        pos = steps_to_position(tel.cart_steps, self.hw.steps_per_meter, self.hw.cart_sign)
-        angle = ticks_to_angle(tel.encoder_ticks, self.hw.encoder_cpr, self.hw.encoder_sign, self.hw.angle_zero)
+        pos = steps_to_position(tel.cart_steps - self.cart_origin_steps, self.hw.steps_per_meter, self.hw.cart_sign)
+        angle = ticks_to_angle(tel.encoder_ticks - self.angle_origin_ticks, self.hw.encoder_cpr,
+                               self.hw.encoder_sign, self.hw.angle_zero)
 
         if self._prev_pos is not None and dt > 0:
             raw_cart_vel = (pos - self._prev_pos) / dt

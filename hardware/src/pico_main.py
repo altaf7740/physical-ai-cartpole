@@ -11,7 +11,7 @@
 #
 # Wiring (TB6600 inputs common cathode: PUL-, DIR-, ENA- to Pico GND):
 #   Pico GP16 -> PUL+   Pico GP17 -> DIR+   ENA+ open (driver always enabled, holds torque at rest)
-#   Pico GP2 / GP3 -> encoder A / B
+#   Pico GP14 / GP15 -> encoder A / B (index channel C/Z not connected)
 #   Pico GP13 / GP1 -> left / right limit switch, C + NC to GND (internal pull-up): closed = low at rest,
 #   pressed = open = high. A broken wire also reads high, so it stops the cart instead of going unnoticed.
 # Microstepping and current are set on the TB6600 DIP switches (1/16 = 3200 steps/rev);
@@ -46,10 +46,10 @@ def step_dir_pio():
     set(pins, 0)
 
 
-# --- Encoder (GP2 = A, GP3 = B) ---
+# --- Encoder (GP14 = A, GP15 = B; C/Z unused) ---
 # Pull-ups for open-collector encoders; harmless on push-pull 3.3 V outputs.
-ENC_A = Pin(2, Pin.IN, Pin.PULL_UP)
-ENC_B = Pin(3, Pin.IN, Pin.PULL_UP)
+ENC_A = Pin(14, Pin.IN, Pin.PULL_UP)
+ENC_B = Pin(15, Pin.IN, Pin.PULL_UP)
 
 # Quadrature lookup indexed by (prev_state << 2) | state, with state = (A << 1) | B.
 # 00 -> 10 -> 11 -> 01 -> 00 counts +1 per edge, the reverse -1. A double change

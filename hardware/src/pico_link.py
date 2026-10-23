@@ -2,7 +2,7 @@
 
 Protocol (newline-terminated ASCII, one request -> one reply):
     Pi  -> Pico : "R"            reset encoder and step counters
-    Pi  -> Pico : "<step_rate>"  signed half-steps per second, e.g. "-1250"
+    Pi  -> Pico : "<step_rate>"  signed steps per second, e.g. "-1250" (negative = toward the left switch)
     Pico -> Pi  : "<encoder_ticks>,<cart_steps>,<limit_hit>"
                   limit_hit: 0 none, 1 left, 2 right, 3 both (any non-zero counts as hit)
 """
@@ -19,7 +19,11 @@ from config import SerialConfig
 class Telemetry:
     encoder_ticks: int
     cart_steps: int
-    limit_hit: bool
+    limits: int  # bitmask: 1 = left switch pressed, 2 = right
+
+    @property
+    def limit_hit(self) -> bool:
+        return self.limits != 0
 
 
 def parse_telemetry(line: str) -> Telemetry | None:
@@ -31,7 +35,7 @@ def parse_telemetry(line: str) -> Telemetry | None:
         ticks, steps, lim = (int(p) for p in parts)
     except ValueError:
         return None
-    return Telemetry(encoder_ticks=ticks, cart_steps=steps, limit_hit=bool(lim))
+    return Telemetry(encoder_ticks=ticks, cart_steps=steps, limits=lim)
 
 
 def format_step_rate(step_rate: int) -> bytes:

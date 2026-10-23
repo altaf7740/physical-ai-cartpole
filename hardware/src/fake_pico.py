@@ -16,13 +16,16 @@ GRAVITY = 9.81
 POLE_LENGTH_M = 0.3
 POLE_DAMPING = 0.05  # 1/s
 SUBSTEP_S = 0.001
-END_STOP_M = 0.3  # simulated limit switches, this far either side of the reset position
+# Simulated limit switches, measured from the reset position (deliberately off-centre, like a real
+# cart that was not reset in the middle). Left is negative raw steps, as on the Pico.
+LEFT_STOP_M, RIGHT_STOP_M = 0.35, 0.25
 
 
 class FakePico:
     def __init__(self, cfg: Config):
         self.hw = cfg.hardware
-        self.hard_limit_m = END_STOP_M
+        self._left_stop = -LEFT_STOP_M * self.hw.steps_per_meter
+        self._right_stop = RIGHT_STOP_M * self.hw.steps_per_meter
         # Start where the config says the pole is at reset, so readings are consistent.
         self._theta = math.pi if self.hw.angle_zero == "down" else 0.0  # rad, 0 = upright, unwrapped
         self._omega = 0.0
@@ -64,9 +67,6 @@ class FakePico:
         self._theta = angle + 2 * math.pi * round(self._theta / (2 * math.pi))
         self._omega = 0.0
 
-    def _x(self) -> float:
-        return self.hw.cart_sign * self._steps / self.hw.steps_per_meter
-
     def _set_rate(self, rate: int) -> None:
         # A stepper changes speed instantly, which kicks the pole: d(omega) = -dv cos(theta) / L.
         dv = self.hw.cart_sign * (rate - self._rate) / self.hw.steps_per_meter
@@ -82,9 +82,8 @@ class FakePico:
             self._omega += (GRAVITY / POLE_LENGTH_M * math.sin(self._theta) - POLE_DAMPING * self._omega) * h
             self._theta += self._omega * h
             self._steps += self._rate * h
-            x = self._x()
-            if abs(x) > self.hard_limit_m:  # hit the end stop
-                self._steps = self.hw.cart_sign * math.copysign(self.hard_limit_m, x) * self.hw.steps_per_meter
+            if not self._left_stop <= self._steps <= self._right_stop:  # hit a limit switch
+                self._steps = min(max(self._steps, self._left_stop), self._right_stop)
                 self._set_rate(0)
 
     def _telemetry(self) -> Telemetry:
@@ -92,5 +91,5 @@ class FakePico:
         return Telemetry(
             encoder_ticks=round(ticks),
             cart_steps=round(self._steps - self._steps_at_reset),
-            limit_hit=abs(self._x()) >= self.hard_limit_m - 1e-9,
+            limits=(1 if self._steps <= self._left_stop else 0) | (2 if self._steps >= self._right_stop else 0),
         )

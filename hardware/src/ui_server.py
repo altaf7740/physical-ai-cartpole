@@ -23,6 +23,7 @@ COMMANDS = {
     "connect": lambda svc, body: svc.connect(),
     "disconnect": lambda svc, body: svc.disconnect(),
     "reset": lambda svc, body: svc.reset_counters(),
+    "calibrate": lambda svc, body: svc.start_calibration(float(body.get("speed", 0.1))),
     "estop": lambda svc, body: svc.estop(),
     "jog": lambda svc, body: svc.jog(float(body.get("velocity", 0.0))),
     "policy_start": lambda svc, body: svc.start_policy(bool(body.get("live", False))),

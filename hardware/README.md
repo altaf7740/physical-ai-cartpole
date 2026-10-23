@@ -17,7 +17,7 @@ Pico wiring (`src/pico_main.py`, flashed with `make flash` on the Pi):
 | GP16 | TB6600 PUL+ |
 | GP17 | TB6600 DIR+ |
 | GND | TB6600 PUL-, DIR-, ENA- (ENA+ open: driver always enabled) |
-| GP2 / GP3 | encoder A / B (internal pull-ups on) |
+| GP14 / GP15 | encoder A / B (internal pull-ups on; index C/Z not connected) |
 | GP13 / GP1 | left / right limit switch, COM + NC to GND (internal pull-up; pressed or broken wire = high) |
 
 The TB6600 DIP switches are on 1/16 microstepping (3200 steps/rev), so `steps_per_meter = 80000`;
@@ -40,9 +40,10 @@ physical-ai-cartpole/
     ├── state.py           # counts -> (x, theta, dx, dtheta), 0 rad = upright
     ├── interface.py       # sim<->real contract: observation order, action -> step rate
     ├── policy.py          # ONNX or numpy MLP inference
-    ├── safety.py          # engage/disengage, soft track limit, limit switch, lost link
+    ├── safety.py          # engage/disengage, limit switch, lost link
     ├── logger.py          # per-tick CSV
     ├── controller.py      # fixed-rate loops + BalanceController (one control tick)
+    ├── calibration.py     # home on both limit switches, measure the track, x = 0 at the centre
     ├── hardware_service.py# UI backend: loop thread owning the Pico, commands, sample buffer
     ├── ui_server.py       # stdlib HTTP server: page, SSE telemetry, POST commands
     ├── ui.html            # the browser UI (no external dependencies)
@@ -68,6 +69,11 @@ make ui-stop     # Pi: stop the background UI (motor commanded to 0)
   Also a cart/pole drawing to check signs, and loop health (actual Hz, late ticks, missed replies).
 - **Control:** hold-to-jog (buttons or ← →) with a speed slider, reset counters, dry run, and LIVE
   (needs the *Armed* checkbox), clear fault, and CSV recording. **E-STOP** is the button, `Space` or `Esc`.
+- **Home & measure track:** drives to the left limit switch, then the right one, twice (at the jog speed),
+  then parks in the middle and makes that x = 0. The travel between the switches (in steps, and in metres at
+  `steps_per_meter`) and the two passes' spread are shown and saved to `logs/track_calibration.json`; the
+  drawing then shows the real rail. If a tape measure disagrees with the length, fix `steps_per_meter`
+  (= travel steps / real metres). Homing is lost on reconnect; once homed, *Reset counters* zeroes θ only.
 - **Safety:** a jog only lasts `jog_timeout_s` unless the browser keeps repeating it, so a closed
   tab, lost focus or dropped network stops the cart. There is no soft limit: the Pico stops the cart at
   either limit switch and only lets it move away from a pressed one. The server listens on `0.0.0.0:8000` with **no login**, so anyone on the LAN can drive the motor.
