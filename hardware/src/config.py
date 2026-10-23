@@ -35,6 +35,8 @@ class HardwareConfig:
     cart_sign: int = 1
     # Where the pole is when the Pico counters are reset ("R" command).
     angle_zero: str = "down"
+    # Measured track travel (written by Calibrate track, read by Home).
+    calibration_file: str = "track_calibration.json"
 
 
 @dataclass(frozen=True)
@@ -164,6 +166,7 @@ def load_config(path: str | Path) -> Config:
     base = path.resolve().parent
     cfg = replace(
         cfg,
+        hardware=replace(cfg.hardware, calibration_file=str(base / cfg.hardware.calibration_file)),
         policy=replace(cfg.policy, model_path=str(base / cfg.policy.model_path)),
         logging=replace(cfg.logging, directory=str(base / cfg.logging.directory)),
     )

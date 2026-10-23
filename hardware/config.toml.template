@@ -1,5 +1,5 @@
-# Copy to config.toml (`make config`) and edit for your rig.
-# config.toml is git-ignored; this template is the documented reference.
+# config.toml is this rig's config and is committed; config.toml.template documents every key
+# (`make config` copies it when config.toml is missing).
 
 [serial]
 port = "/dev/ttyACM0"        # Pico USB serial
@@ -14,6 +14,7 @@ max_step_rate = 20000        # steps/s, the TB6600 input limit (= 0.25 m/s at 1/
 encoder_sign = 1             # flip to -1 if +theta is the opposite way to the sim
 cart_sign = 1                # flip to -1 if +x is the opposite way to the sim
 angle_zero = "down"          # where the pole is when counters reset: "down" or "upright"
+calibration_file = "track_calibration.json"  # measured track travel, written by Calibrate track
 
 [estimator]
 velocity_alpha = 0.3         # low-pass weight on new velocity samples (1.0 = no filter)

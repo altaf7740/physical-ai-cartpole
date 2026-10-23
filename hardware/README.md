@@ -27,12 +27,15 @@ negative steps must move the cart toward the left switch.
 ## Layout
 
 ```
-physical-ai-cartpole/
+hardware/                  # on the Pi: ~/physical-ai-cartpole/hardware
 ├── Makefile               # make help
-├── config.toml.template   # copy to config.toml (make config)
+├── config.toml            # this rig's config (committed)
+├── config.toml.template   # every key, documented
+├── track_calibration.json # measured track travel (Calibrate track writes it)
 ├── requirements.txt
 ├── models/                # put policy.onnx / policy.npz here (placeholder)
-├── logs/                  # one CSV per run
+├── logs/                  # one CSV per run, ui.log
+├── pico-backup/           # the Pico's earlier main.py files, for reference
 └── src/
     ├── main.py            # CLI: serial | sensors | dry-run | run
     ├── config.py          # TOML -> typed, validated config
@@ -49,8 +52,6 @@ physical-ai-cartpole/
     ├── ui.html            # the browser UI (no external dependencies)
     ├── fake_pico.py       # simulated Pico + pendulum for --fake
     ├── pico_main.py       # Pico firmware (MicroPython): encoder + PIO step/dir for a TB6600
-    ├── pico_main_l298n.py # firmware for an L298N (PIO coil patterns on GP14-17)
-    ├── pico_main_hat.py   # firmware for a PWM+DIR dual H-bridge HAT (untested)
     └── tests/             # hardware-free unit tests (make test)
 ```
 
@@ -71,7 +72,7 @@ make ui-stop     # Pi: stop the background UI (motor commanded to 0)
   (needs the *Armed* checkbox), clear fault, and CSV recording. **E-STOP** is the button, `Space` or `Esc`.
 - **Calibrate track:** drives to the left limit switch, then the right one, twice (at the jog speed), then
   parks in the middle and makes that x = 0. The travel between the switches (in steps, and in metres at
-  `steps_per_meter`) and the two passes' spread are shown and saved to `logs/track_calibration.json`; the
+  `steps_per_meter`) and the two passes' spread are shown and saved to `track_calibration.json`; the
   drawing then shows the real rail. If a tape measure disagrees with the length, fix `steps_per_meter`
   (= travel steps / real metres). Run it again after changing the rail, pulley or microstepping.
 - **Home:** left switch, then half the saved travel, so x = 0 is the centre (a full calibration if none is
@@ -100,11 +101,8 @@ Reply: `<encoder_ticks>,<cart_steps>,<limit_hit>`.
 ## Bring-up, in order
 
 ```bash
-# Mac
-make deploy                 # rsync to cartpole-pi:~/physical-ai-cartpole
-
-# Pi (make ssh)
-make venv config            # once
+# Pi: the code is a clone of the repo; work in ~/physical-ai-cartpole/hardware
+make venv                   # once
 make serial                 # 1. does the Pico answer?
 make sensors                # 2. move by hand: check signs, units, zero
 make dry-run                # 3. policy on real sensors, motor off

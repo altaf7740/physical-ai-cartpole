@@ -1,8 +1,8 @@
 # physical-ai-cartpole — run `make help` for targets.
-# Typical flow: on the Mac `make deploy`, then on the Pi `make venv config sensors`.
+# On the Pi, in ~/physical-ai-cartpole/hardware (a clone of the repo): `make venv`, then `make ui-start`.
 
 PI_HOST ?= cartpole-pi
-PI_DIR  ?= ~/physical-ai-cartpole
+PI_DIR  ?= ~/physical-ai-cartpole/hardware
 CONFIG  ?= config.toml
 VENV    ?= .venv
 PYTHON  := $(VENV)/bin/python
@@ -82,8 +82,8 @@ MPREMOTE  ?= $(HOME)/.local/bin/mpremote
 flash: ## Pi: copy src/pico_main.py to the Pico as main.py and restart it (stop the UI first)
 	$(MPREMOTE) connect $(PICO_PORT) fs cp src/pico_main.py :main.py + reset
 
-deploy: ## Mac: copy the project to the Pi (keeps the Pi's config.toml, logs/ and venv)
-	rsync -av --delete --exclude .venv --exclude config.toml --exclude 'logs/' \
+deploy: ## Mac: copy hardware/ to the Pi (keeps the Pi's config.toml, calibration, logs/ and venv)
+	rsync -av --delete --exclude .venv --exclude config.toml --exclude track_calibration.json --exclude 'logs/' \
 		--exclude __pycache__ --exclude .git ./ $(PI_HOST):$(PI_DIR)/
 
 ssh: ## Mac: open a shell in the project folder on the Pi

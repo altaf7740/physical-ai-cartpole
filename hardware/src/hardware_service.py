@@ -57,7 +57,7 @@ class HardwareService:
         self._estimator: StateEstimator | None = None
         self._calibrator: TrackCalibrator | None = None
         self._cal_message = ""
-        self._track_file = Path(cfg.logging.directory) / "track_calibration.json"
+        self._track_file = Path(cfg.hardware.calibration_file)
         self._track = load_calibration(self._track_file)  # last measured travel, kept across restarts
         self._homed = False  # x = 0 is the track centre (lost when the Pico counters reset)
 

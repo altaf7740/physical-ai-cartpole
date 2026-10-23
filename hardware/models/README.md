@@ -1,6 +1,6 @@
 # models/
 
-Placeholder for the trained policy. Model files are git-ignored.
+Placeholder for the trained policy. Model files here are git-ignored; the committed policy is in ../../policy/.
 
 Put **one** of these here and point `[policy] model_path` in `config.toml` at it:
 

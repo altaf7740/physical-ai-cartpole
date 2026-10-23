@@ -29,15 +29,8 @@ scripts/
   viewer_ui.py             signal panel + keyboard taps (Kit UI only; used by play.py and isaacsim_play.py)
 policy/                    the current trained policy, committed to git (`make policy`):
                            policy.pt, policy_pi.onnx, policy_io.json, SOURCE.txt (which run it came from)
-pi/
-  run_policy.py            60 Hz controller for the Raspberry Pi (torch + stdlib); --web serves the live page
-  web_server.py            the page's server: Server-Sent Events + control commands (stdlib only)
-  web_ui.html              the live page (self-contained, works without internet)
-  fake_rig.py              simulated rig for testing without hardware (--fake)
-  install-pi.sh            installs / updates the controller as a service on the Pi
-  cartpole.service         systemd unit (starts at boot, motor off until Start on the page)
-hardware/                  the real rig: Pi 4 policy runner + web UI, and the Pico firmware (encoder + TB6600
-                           step/dir); see hardware/README.md
+hardware/                  the real rig: Pi 4 policy runner + web UI, the Pico firmware (encoder + TB6600
+                           step/dir, limit switches), the rig's config and track calibration; see hardware/README.md
 ```
 
 ## Setup (once)
@@ -57,8 +50,7 @@ C:\isaac\IsaacLab\isaaclab.bat -p -m pip install -e C:\Users\Admin\Desktop\rnd\c
 | `make train` | train headless (600 iterations, about 7 min) |
 | `make play` | headless: export `policy.pt` / `.onnx` / `policy_io.json` and print statistics |
 | `make eval` | stress test, 4096 episodes (`PUSH=0` no taps, `PUSH=2` twice as hard) |
-| `make policy` | copy the newest export into `policy/` (commit it to publish a new policy; the Pi installs from there) |
-| `make pi-demo` | the Pi controller and its live web page on this PC, with a simulated rig: open http://localhost:8000 (`PORT=...`) |
+| `make policy` | copy the newest export into `policy/` (commit it to publish a new policy) |
 | `make help` | list the targets |
 
 Options: `ENVS=4` sets how many rigs are shown and `CKPT=logs\...\model_599.pt` picks a checkpoint (default:
@@ -124,14 +116,14 @@ normalizer. The exported model contains no normalizer (`obs_normalization=False`
 Output has shape (1, 1). Use `a = clamp(output, -1, 1)`. The output is not clipped inside the model, so you
 must clamp it. `a` is the signed PWM duty: motor voltage = a × 12 V, and positive drives the cart toward +x.
 
-`policy_io.json` holds the same numbers (taken from `rig_cfg.py` at export time), and `pi/run_policy.py`
-reads it. If you change `obs_scale` you must retrain.
+`policy_io.json` holds the same numbers (taken from `rig_cfg.py` at export time). The rig code in `hardware/`
+must use the same order and scaling (`[policy]` in `hardware/config.toml`). If you change `obs_scale` you must retrain.
 
 **Encoders on the rig.** Cart position comes from the motor encoder:
 x = (counts − centre counts) / counts per output rev × 0.040 m. The pendulum encoder reads 0 with the pole
 **hanging down**, but the policy wants 0 = **upright**. The Pi therefore subtracts 180° and wraps the result
-to [−π, π]. `pi/run_policy.py` already does this. Home the cart at the rail centre at start-up so that
-`CART_CENTRE_COUNTS` is right.
+to [−π, π]. `hardware/` does this (`angle_zero = "down"`), and it homes the cart on the limit switches at
+start-up so that x = 0 is the rail centre.
 
 **Sign check on the rig:** with the pole held upright, command a small positive duty. The cart must move
 toward +x, and x must increase (otherwise flip `CART_SIGN`). Tilt the pole toward +x: theta must go positive
@@ -197,62 +189,24 @@ to reach an observation-term instance from an event.
 
 1. Edit `src/cartpole_rig/rig_cfg.py`: masses, `pole_com`, `pole_length`, motor constants, `motor_inertia`,
    friction, delays and noise. The USD regenerates automatically on the next run.
-2. Retrain, `make play`, `make policy`, commit and push; on the Pi `git pull` and `sudo ./install-pi.sh`.
-3. On the Pi: `python run_policy.py --policy policy.pt --io policy_io.json --web`. Fill in the encoder
-   constants and the serial I/O in the two stub functions first.
+2. Retrain, `make play`, `make policy`, commit and push; on the Pi `git pull` in `~/physical-ai-cartpole`.
+3. Run it on the rig with `hardware/` (see `hardware/README.md`).
 
-## Install on the Pi (runs at boot)
+## Running on the rig
 
-Needs a Raspberry Pi 4 with **64-bit** Raspberry Pi OS (torch has no 32-bit wheels) and network access for the
-first install.
+Everything for the real rig is in `hardware/`: the Pi 4 runner and web UI, the Pico firmware, the rig's
+config and its track calibration. On the Pi the repo is cloned to `~/physical-ai-cartpole`:
 
 ```bash
-# on the Pi
-git clone git@github.com:altaf7740/physical-ai-cartpole.git && cd physical-ai-cartpole/pi
-sudo ./install-pi.sh                 # installs the policy committed in ../policy
+ssh cartpole-pi 'cd ~/physical-ai-cartpole/hardware && make ui-start'   # web UI on http://<pi-address>:8000
 ```
-To install a policy that is not committed, pass its folder: `sudo ./install-pi.sh ~/exported`.
 
-The installer creates the system user `cartpole` (in group `dialout` for the Pico's serial port) and copies the
-controller files and the policy to `/opt/cartpole`. It creates a Python venv there with torch and pyserial,
-then installs and starts `cartpole.service`. Open `http://<pi-address>:8000`; the motor stays off until you press
-Start.
-
-- Update the code or the policy: `git pull`, then run `sudo ./install-pi.sh` again.
-- Options: `/etc/default/cartpole` (`CARTPOLE_ARGS="--web"`; add `--fake` to test the Pi without the rig,
-  `--port N` for another port), then `sudo systemctl restart cartpole`.
-- Logs: `journalctl -u cartpole -f`. Stop: `sudo systemctl stop cartpole`. Disable at boot:
-  `sudo systemctl disable cartpole`.
-- Stopping the service sends SIGINT (not SIGTERM), so the controller's cleanup runs and sends PWM 0 before it
-  exits. Still keep a physical emergency stop on the rig.
-- Until `read_encoders()` / `write_pwm()` talk to the Pico, the hardware mode only sees the stub's constant
-  values. Use `--fake` to see the page work.
-
-## Live web page from the Pi
-
-`run_policy.py --web` serves a page at `http://<pi-address>:8000` that any phone or laptop on the same network
-can open. It shows the real rig live, drawn from the encoder readings:
-- cart position / velocity and pole angle / angular velocity as the policy gets them, the policy output
-  (PWM duty) and the motor voltage
-- 10 s plots, loop health (actual period and jitter against the 16.7 ms target, compute time) and a fall count
-- **Start**, **Stop**, **Reset** and **E-STOP** (Esc key)
-
-The controller starts idle with the motor off. Hold the pole upright and press Start; if the pole or cart leaves
-the trained envelope it trips (motor off) until you start it again. E-STOP latches until Reset. The page cannot
-push the motor: real disturbances are your hand.
-
-Safety: the 60 Hz loop never waits for the network (the server only reads a copy of the latest values), but the
-web E-STOP still depends on Wi-Fi, so keep a physical emergency stop on the rig. The page has no password: keep
-it on your local network.
-
-Without hardware: `make pi-demo` runs the same controller and page on this PC against `pi/fake_rig.py`, which
-produces encoder counts like the real encoders (pendulum 0 = hanging), so the whole Pi pipeline is exercised.
-There, Reset stands the simulated pole up and holds it, like a hand, until Start, and the rig gets a random
-tap every few seconds. It needs the `rig` section in `policy_io.json`, which `make play` writes.
+The UI homes the cart on the limit switches as soon as it connects. See `hardware/README.md` for wiring,
+firmware (`make flash`), calibration and the policy bring-up steps.
 
 Velocity from encoder counts: the Pi differentiates counts at 60 Hz, so one count of a 2400-count pendulum
 encoder is a 0.16 rad/s step in angular velocity. That is noisier than the policy saw in training and shows as
-a chattering PWM duty (visible in `make pi-demo`). Use a higher-resolution encoder or 4x quadrature decoding,
+a chattering command. Use a higher-resolution encoder or 4x quadrature decoding,
 add a light velocity filter, or raise the angular-velocity noise in `obs_noise_std` and retrain.
 
 Simple ways to measure the motor (needs no current sensor): Ke = V / omega_no_load. R = V / I_stall (measure

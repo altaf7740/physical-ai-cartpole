@@ -83,7 +83,7 @@ def policy_io(rig) -> dict:
         "trained_obs_delay_steps": list(rig.obs_delay_steps),
         "trained_action_delay_steps": list(rig.action_delay_steps),
         "trained_obs_noise_std": list(rig.obs_noise_std),
-        # all rig parameters (used by pi/fake_rig.py to simulate the rig for testing the Pi page)
+        # all rig parameters (for simulating the rig outside Isaac Lab)
         "rig": dataclasses.asdict(rig),
     }
 
