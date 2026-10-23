@@ -69,11 +69,14 @@ make ui-stop     # Pi: stop the background UI (motor commanded to 0)
   Also a cart/pole drawing to check signs, and loop health (actual Hz, late ticks, missed replies).
 - **Control:** hold-to-jog (buttons or ← →) with a speed slider, reset counters, dry run, and LIVE
   (needs the *Armed* checkbox), clear fault, and CSV recording. **E-STOP** is the button, `Space` or `Esc`.
-- **Home & measure track:** drives to the left limit switch, then the right one, twice (at the jog speed),
-  then parks in the middle and makes that x = 0. The travel between the switches (in steps, and in metres at
+- **Calibrate track:** drives to the left limit switch, then the right one, twice (at the jog speed), then
+  parks in the middle and makes that x = 0. The travel between the switches (in steps, and in metres at
   `steps_per_meter`) and the two passes' spread are shown and saved to `logs/track_calibration.json`; the
   drawing then shows the real rail. If a tape measure disagrees with the length, fix `steps_per_meter`
-  (= travel steps / real metres). Homing is lost on reconnect; once homed, *Reset counters* zeroes θ only.
+  (= travel steps / real metres). Run it again after changing the rail, pulley or microstepping.
+- **Home:** left switch, then half the saved travel, so x = 0 is the centre (a full calibration if none is
+  saved). With `[ui] home_on_connect = true` it runs **by itself every time the Pico connects**, so the cart
+  moves when the UI starts; E-STOP aborts it. Once homed, *Reset counters* zeroes θ only.
 - **Safety:** a jog only lasts `jog_timeout_s` unless the browser keeps repeating it, so a closed
   tab, lost focus or dropped network stops the cart. There is no soft limit: the Pico stops the cart at
   either limit switch and only lets it move away from a pressed one. The server listens on `0.0.0.0:8000` with **no login**, so anyone on the LAN can drive the motor.

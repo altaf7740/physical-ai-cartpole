@@ -177,7 +177,8 @@ def wait_for(predicate, timeout=3.0):
 
 class TestHardwareService(unittest.TestCase):
     def setUp(self):
-        self.cfg = template_config()
+        cfg = template_config()
+        self.cfg = replace(cfg, ui=replace(cfg.ui, home_on_connect=False))  # no automatic homing run
         self.svc = HardwareService(self.cfg, lambda: FakePico(self.cfg), fake=True)
 
     def tearDown(self):
@@ -231,6 +232,15 @@ class TestCalibration(unittest.TestCase):
         cal = TrackCalibrator(rate=2000)
         run_calibration(cal, left=-3000, right=5000, start=5000)
         self.assertEqual(cal.result.travel_steps, 8000)
+
+    def test_home_uses_saved_travel(self):
+        cal = TrackCalibrator(rate=2000, travel_steps=8000)
+        end = run_calibration(cal, left=-3000, right=5000, start=4000)
+        self.assertEqual(cal.phase, "done")
+        self.assertEqual(cal.legs, [-1])  # left switch only
+        self.assertEqual(cal.target, 1000)
+        self.assertIsNone(cal.result)  # homing does not re-measure
+        self.assertLessEqual(abs(end - 1000), 40)
 
     def test_missing_switch_fails(self):
         cal = TrackCalibrator(rate=2000, leg_timeout_s=1.0)

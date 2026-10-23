@@ -77,6 +77,9 @@ class UiConfig:
     push_hz: float = 20.0
     # A jog command expires after this long unless the browser repeats it (dead-man).
     jog_timeout_s: float = 0.3
+    # Home on the limit switches every time the Pico connects (UI start and reconnects).
+    home_on_connect: bool = True
+    home_speed_mps: float = 0.08
 
 
 @dataclass(frozen=True)
@@ -137,6 +140,8 @@ def _validate(cfg: Config) -> None:
         raise ConfigError("[safety] disengage_angle_deg must be >= engage_angle_deg")
     if saf.max_cart_vel_mps <= 0:
         raise ConfigError("[safety] max_cart_vel_mps must be > 0")
+    if cfg.ui.home_speed_mps <= 0:
+        raise ConfigError("[ui] home_speed_mps must be > 0")
     if not 0 < cfg.ui.port < 65536 or cfg.ui.push_hz <= 0 or cfg.ui.jog_timeout_s <= 0:
         raise ConfigError("[ui] port must be 1-65535; push_hz and jog_timeout_s must be > 0")
 

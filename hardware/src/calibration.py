@@ -1,4 +1,7 @@
-"""Track calibration: home on both limit switches, measure the travel, park in the middle.
+"""Track calibration and homing on the limit switches; both park the cart in the middle.
+
+Calibrate: left switch, right switch, twice, measuring the travel between them.
+Home: left switch only, then half the measured travel; needs a saved calibration.
 
 Works in raw Pico steps (negative steps move toward the left switch, see pico_main.py), so it
 does not depend on cart_sign or steps_per_meter. The travel in steps between the two switch
@@ -34,12 +37,18 @@ class TrackCalibration:
 
 
 class TrackCalibrator:
-    """One homing run. Call step() every control tick; it returns the step rate to send."""
+    """One calibration or homing run. Call step() every control tick; it returns the step rate to send.
 
-    def __init__(self, rate: int, passes: int = 2, leg_timeout_s: float = LEG_TIMEOUT_S):
+    With travel_steps (a saved calibration) it only homes: left switch, then half the travel.
+    Without it, it measures the track with `passes` left-right passes and sets `result`.
+    """
+
+    def __init__(self, rate: int, passes: int = 2, leg_timeout_s: float = LEG_TIMEOUT_S,
+                 travel_steps: int | None = None):
         self.rate = abs(int(rate))
         self.leg_timeout_s = leg_timeout_s
-        self.legs = [-1, 1] * passes  # direction of each leg: left first, then right
+        self.travel_steps = travel_steps
+        self.legs = [-1] if travel_steps else [-1, 1] * passes  # direction of each leg, left first
         self.leg = 0
         self.hits: dict[int, list[int]] = {-1: [], 1: []}
         self.phase = "homing"  # -> "centring" -> "settling" -> "done" | "failed"
@@ -54,8 +63,10 @@ class TrackCalibrator:
 
     def describe(self) -> str:
         if self.phase == "homing":
+            if self.travel_steps:
+                return "homing: to the left switch"
             side = "left" if self.legs[self.leg] < 0 else "right"
-            return f"pass {self.leg // 2 + 1}/{len(self.legs) // 2}: to the {side} switch"
+            return f"calibrating, pass {self.leg // 2 + 1}/{len(self.legs) // 2}: to the {side} switch"
         if self.phase in ("centring", "settling"):
             return "parking in the middle"
         if self.phase == "failed":
@@ -97,6 +108,10 @@ class TrackCalibrator:
         return 0
 
     def _start_centring(self) -> None:
+        self.phase, self.elapsed = "centring", 0.0
+        if self.travel_steps:
+            self.target = self.hits[-1][-1] + round(self.travel_steps / 2)
+            return
         travels = [r - l for l, r in zip(self.hits[-1], self.hits[1])]
         left, right = self.hits[-1][-1], self.hits[1][-1]
         self.target = round((left + right) / 2)
@@ -107,7 +122,6 @@ class TrackCalibrator:
             centre_steps=self.target,
             measured_at=time.time(),
         )
-        self.phase, self.elapsed = "centring", 0.0
 
 
 def save_calibration(path: Path, cal: TrackCalibration) -> None:

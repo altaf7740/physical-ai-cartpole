@@ -129,14 +129,19 @@
       <p class="hint">Hold to move, release to stop. Keys: hold <kbd>←</kbd> <kbd>→</kbd>, <kbd>Space</kbd>/<kbd>Esc</kbd> = E-stop.
         The limit switches stop the cart; it can always move away from a pressed one.</p>
       <div class="row" style="margin-top:10px">
-        <button id="btn-home" class="grow">Home &amp; measure track</button>
+        <button id="btn-home" class="grow">Home</button>
+        <button id="btn-calibrate" class="grow">Calibrate track</button>
+      </div>
+      <div class="row">
         <button id="btn-reset" class="grow">Reset counters (zero x &amp; θ)</button>
       </div>
       <p class="hint" id="reset-hint"></p>
       <p class="hint mono" id="cal-text" style="white-space: pre-line"></p>
-      <p class="hint">Homing drives to the left switch, then the right one, twice, at the speed above, then parks in
-        the middle and makes that x = 0. The travel between the switches is the real track length; if your tape
-        measure disagrees with it, <code>steps_per_meter</code> is wrong. Once homed, <b>Reset counters</b> zeroes θ only.</p>
+      <p class="hint"><b>Home</b> (also runs by itself whenever the Pico connects): left switch, then half the measured
+        track, so x = 0 is the centre. <b>Calibrate track</b> measures the track: left switch, right switch, twice, then
+        parks in the middle; run it after changing the rail, pulley or microstepping. Both use the speed above. The
+        travel is the real track length; if a tape measure disagrees, <code>steps_per_meter</code> is wrong.
+        Once homed, <b>Reset counters</b> zeroes θ only.</p>
     </div>
 
     <div class="card">
@@ -448,7 +453,8 @@ function renderStatus() {
   $("btn-disconnect").disabled = !connected;
   $("btn-reset").disabled = !connected || ctl === "calibrating";
   $("btn-reset").textContent = homed() ? "Zero θ (pole hanging still)" : "Reset counters (zero x & θ)";
-  $("btn-home").disabled = !connected || !manual;
+  $("btn-home").disabled = $("btn-calibrate").disabled = !connected || !manual;
+  $("btn-home").textContent = status.track ? "Home" : "Home (measures the track first)";
   const tr = status.track;
   $("cal-text").textContent = (status.calibration ? status.calibration + "\n" : "") + (tr
     ? `Track: ${tr.travel_steps} steps = ${tr.length_m.toFixed(3)} m at ${tr.steps_per_meter} steps/m` +
@@ -525,7 +531,8 @@ $("estop").onclick = estop;
 $("btn-connect").onclick = () => api("connect");
 $("btn-disconnect").onclick = () => api("disconnect");
 $("btn-reset").onclick = () => api("reset");
-$("btn-home").onclick = () => api("calibrate", { speed: speed() });
+$("btn-home").onclick = () => api("home", { speed: speed() });
+$("btn-calibrate").onclick = () => api("calibrate", { speed: speed() });
 $("btn-dry").onclick = () => api("policy_start", { live: false });
 $("btn-live").onclick = async () => {
   const r = await api("policy_start", { live: true });

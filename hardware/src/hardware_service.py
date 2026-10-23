@@ -114,22 +114,28 @@ class HardwareService:
             self._jog_velocity = clamp(velocity, self.max_velocity)
             self._jog_deadline = time.monotonic() + self.cfg.ui.jog_timeout_s
 
-    def start_calibration(self, speed_mps: float) -> None:
-        """Home on both limit switches twice, measure the travel, park in the middle (x = 0)."""
+    def start_calibration(self, speed_mps: float, full: bool = True) -> None:
+        """full: measure the track on both switches twice. Otherwise home: left switch, then half the
+        saved travel (falls back to a full calibration if none is saved). Both park at x = 0."""
         with self._lock:
             self._require_connected()
             if self._control != MANUAL:
-                raise CommandError("stop the policy before calibrating")
-            speed = min(abs(speed_mps), self.max_velocity)
-            rate = min(round(speed * self.cfg.hardware.steps_per_meter), self.cfg.hardware.max_step_rate)
-            if rate < 100:
-                raise CommandError("calibration speed too low")
-            # Long enough for a 1.5 m track at this speed before a missing switch aborts the run.
-            self._calibrator = TrackCalibrator(rate, leg_timeout_s=max(30.0, 1.5 / speed))
-            self._control = CALIBRATING
-            self._jog_velocity = 0.0
-            self._homed = False
-            self._cal_message = self._calibrator.describe()
+                raise CommandError("stop the policy before homing or calibrating")
+            self._begin_run(speed_mps, full)
+
+    def _begin_run(self, speed_mps: float, full: bool) -> None:
+        """Called with the lock held."""
+        speed = min(abs(speed_mps), self.max_velocity)
+        rate = min(round(speed * self.cfg.hardware.steps_per_meter), self.cfg.hardware.max_step_rate)
+        if rate < 100:
+            raise CommandError("homing speed too low")
+        travel = None if full or self._track is None else self._track.travel_steps
+        # Long enough for a 1.5 m track at this speed before a missing switch aborts the run.
+        self._calibrator = TrackCalibrator(rate, leg_timeout_s=max(30.0, 1.5 / speed), travel_steps=travel)
+        self._control = CALIBRATING
+        self._jog_velocity = 0.0
+        self._homed = False
+        self._cal_message = self._calibrator.describe()
 
     def start_policy(self, live: bool) -> None:
         with self._lock:
@@ -238,6 +244,8 @@ class HardwareService:
             self._link_state = "connected"
             self._estimator = estimator
             self._homed = False  # the Pico counters were just reset
+            if self.cfg.ui.home_on_connect:
+                self._begin_run(self.cfg.ui.home_speed_mps, full=False)
 
         step_rate, error, tel = 0, "", None
         try:
@@ -295,13 +303,17 @@ class HardwareService:
         if not cal.finished:
             return send
         if cal.phase == "done":
+            self._estimator.set_origins(cart_steps=cal.target)
+            self._homed = True
             r = cal.result
-            self._estimator.set_origins(cart_steps=r.centre_steps)
-            self._track, self._homed = r, True
-            save_calibration(self._track_file, r)
-            length = r.travel_steps / self.cfg.hardware.steps_per_meter
-            self._cal_message = (f"travel {r.travel_steps} steps = {length:.3f} m, passes {list(r.passes)} "
-                                 f"(spread {r.spread_steps}); x = 0 is now the centre")
+            if r is None:  # homing with the saved travel
+                self._cal_message = "homed: x = 0 is the centre"
+            else:
+                self._track = r
+                save_calibration(self._track_file, r)
+                length = r.travel_steps / self.cfg.hardware.steps_per_meter
+                self._cal_message = (f"calibrated: travel {r.travel_steps} steps = {length:.3f} m, passes "
+                                     f"{list(r.passes)} (spread {r.spread_steps}); x = 0 is the centre")
         self._calibrator = None
         self._control = MANUAL
         return 0

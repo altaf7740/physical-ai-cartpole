@@ -48,3 +48,5 @@ host = "0.0.0.0"             # all interfaces: http://cartpole-pi.local:8000 fro
 port = 8000
 push_hz = 20                 # browser update rate (samples are batched, none are dropped)
 jog_timeout_s = 0.3          # jog stops unless the browser keeps repeating it (hold-to-move)
+home_on_connect = true       # home on the limit switches whenever the Pico connects (the cart MOVES on UI start)
+home_speed_mps = 0.08        # speed for that automatic homing
