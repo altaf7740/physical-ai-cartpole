@@ -3,198 +3,357 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>Cartpole Rig</title>
 <style>
+  /* Material Design 3, light scheme (blue seed). Self-contained: no fonts or scripts from the internet. */
   :root {
-    --bg: #0d1117; --panel: #151b23; --panel2: #1c2430; --line: #29313d; --grid: #222a35;
-    --text: #e6edf3; --muted: #8b949e;
-    --theta: #ffb454; --omega: #f07178; --x: #7fd962; --dx: #59c2ff; --cmd: #d2a6ff; --pol: #95e6cb;
-    --ok: #3fb950; --warn: #d29922; --bad: #f85149; --accent: #4493f8;
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --primary: #0b57d0; --on-primary: #fff; --primary-container: #d3e3fd; --on-primary-container: #041e49;
+    --secondary-container: #dde3f2; --on-secondary-container: #151c2c;
+    --tertiary: #146c2e; --tertiary-container: #c4eed0; --on-tertiary-container: #072711;
+    --warn: #8c5000; --warn-container: #ffddb3; --on-warn-container: #2c1600;
+    --error: #b3261e; --on-error: #fff; --error-container: #f9dedc; --on-error-container: #410e0b;
+    --surface: #f8f9fc; --surface-low: #f1f3f8; --surface-card: #fff; --surface-high: #e8ebf2; --surface-highest: #e1e5ec;
+    --on-surface: #1b1c1f; --on-surface-variant: #44474e; --outline: #74777f; --outline-variant: #c4c6d0;
+    --inverse-surface: #2f3033; --inverse-on-surface: #f1f0f4;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.18), 0 1px 3px 1px rgba(0,0,0,.08);
+    --shadow-3: 0 1px 3px rgba(0,0,0,.2), 0 4px 8px 3px rgba(0,0,0,.1);
+    /* canvas palette (names used by the drawing code) */
+    --text: var(--on-surface); --muted: #5f6368; --line: #c4c6d0; --grid: #e6e8ee; --panel2: #e8ebf2;
+    --bad: #d93025; --theta: #e8710a; --omega: #c5221f; --x: #188038; --dx: #1a73e8; --cmd: #9334e6; --pol: #129eaf;
+    --ok: #188038;
+    font-family: Roboto, "Google Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
-  header {
-    position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: var(--surface); color: var(--on-surface); font-size: 14px; line-height: 1.35;
+    display: grid; grid-template-rows: auto minmax(0, 1fr) auto; -webkit-font-smoothing: antialiased;
   }
-  h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 650; letter-spacing: .01em; }
-  .pill {
-    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
-    background: var(--panel2); border: 1px solid var(--line); font-size: 12px; color: var(--muted); white-space: nowrap;
+  .mono { font-family: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  svg.i { width: 18px; height: 18px; fill: currentColor; flex: none; }
+
+  /* ---------- top app bar ---------- */
+  .appbar {
+    display: flex; align-items: center; gap: 8px; min-width: 0; height: 64px; padding: 0 12px 0 16px;
+    background: var(--surface); border-bottom: 1px solid var(--outline-variant);
   }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .pill.ok .dot { background: var(--ok); } .pill.warn .dot { background: var(--warn); } .pill.bad .dot { background: var(--bad); }
-  .pill.ok { color: var(--text); } .pill.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
-  .pill.live { background: color-mix(in srgb, var(--bad) 25%, var(--panel2)); color: var(--text); border-color: var(--bad); }
-  .pill.dry { background: color-mix(in srgb, var(--warn) 20%, var(--panel2)); color: var(--text); border-color: var(--warn); }
-  .spacer { flex: 1; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-right: 8px; flex: none; }
+  .brand .logo { width: 32px; height: 32px; border-radius: 10px; background: var(--primary-container); color: var(--on-primary-container);
+    display: grid; place-items: center; }
+  .brand h1 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: 0; white-space: nowrap; }
+  .chips { display: flex; gap: 6px; min-width: 0; overflow: hidden; flex: 1; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; flex: none;
+    border: 1px solid var(--outline-variant); background: var(--surface-card); color: var(--on-surface-variant);
+    font-size: 13px; font-weight: 500; white-space: nowrap; max-width: 340px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--outline); flex: none; }
+  .chip.ok { background: var(--tertiary-container); color: var(--on-tertiary-container); border-color: transparent; }
+  .chip.ok .dot { background: var(--tertiary); }
+  .chip.warn { background: var(--warn-container); color: var(--on-warn-container); border-color: transparent; }
+  .chip.warn .dot { background: var(--warn); }
+  .chip.bad { background: var(--error-container); color: var(--on-error-container); border-color: transparent; }
+  .chip.bad .dot { background: var(--error); }
+  .chip.live { background: var(--error); color: var(--on-error); border-color: transparent; }
+  .chip.dry, .chip.cal { background: var(--warn-container); color: var(--on-warn-container); border-color: transparent; }
+  .chip.rec { background: var(--error-container); color: var(--on-error-container); border-color: transparent; }
+  .chip.rec .dot { background: var(--error); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .bar-actions { display: flex; gap: 8px; align-items: center; flex: none; }
+
+  /* ---------- buttons ---------- */
   button {
-    font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
-    border-radius: 7px; padding: 7px 12px; cursor: pointer; user-select: none; touch-action: none;
+    position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font: inherit; font-size: 14px; font-weight: 500; letter-spacing: .01em; height: 40px; padding: 0 20px;
+    border-radius: 20px; border: none; cursor: pointer; user-select: none; touch-action: none; white-space: nowrap;
+    background: var(--secondary-container); color: var(--on-secondary-container); transition: box-shadow .15s, background .15s;
   }
-  button:hover:not(:disabled) { border-color: var(--muted); }
-  button:disabled { opacity: .4; cursor: not-allowed; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button.danger { background: color-mix(in srgb, var(--bad) 22%, var(--panel2)); border-color: var(--bad); }
-  button.on { background: color-mix(in srgb, var(--bad) 30%, var(--panel2)); border-color: var(--bad); }
+  button::after { content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0; transition: opacity .15s; pointer-events: none; }
+  button:hover:not(:disabled)::after { opacity: .08; }
+  button:active:not(:disabled)::after { opacity: .14; }
+  button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+  button:disabled { background: color-mix(in srgb, var(--on-surface) 8%, transparent) !important;
+    color: color-mix(in srgb, var(--on-surface) 38%, transparent) !important; box-shadow: none !important; cursor: not-allowed; }
+  button.filled { background: var(--primary); color: var(--on-primary); }
+  button.filled:hover:not(:disabled) { box-shadow: var(--shadow-1); }
+  button.outlined { background: transparent; color: var(--primary); border: 1px solid var(--outline); }
+  button.outlined:disabled { background: transparent !important; border-color: color-mix(in srgb, var(--on-surface) 12%, transparent); }
+  button.text { background: transparent; color: var(--primary); padding: 0 12px; }
+  button.danger { background: var(--error); color: var(--on-error); }
+  button.danger-tonal { background: var(--error-container); color: var(--on-error-container); }
+  button.on { background: var(--error-container); color: var(--on-error-container); }
   #estop {
-    background: var(--bad); border-color: #ff7b72; color: #fff; font-weight: 750; letter-spacing: .06em;
-    padding: 9px 18px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 25%, transparent);
+    height: 44px; padding: 0 22px 0 16px; border-radius: 14px; background: var(--error); color: var(--on-error);
+    font-weight: 700; letter-spacing: .08em; box-shadow: var(--shadow-3);
   }
-  main { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; padding: 16px; }
-  @media (max-width: 960px) { main { grid-template-columns: minmax(0, 1fr); } }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
-  .card h2 { margin: 0 0 10px; font-size: 11px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
-  .readouts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .ro { background: var(--panel2); border-radius: 8px; padding: 7px 10px; min-width: 0; }
-  .ro .k { font-size: 11px; color: var(--muted); }
-  .ro .v { font-size: 19px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ro .v small { font-size: 11px; color: var(--muted); margin-left: 3px; }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
-  .row:first-of-type { margin-top: 0; }
-  .grow { flex: 1; }
-  .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; line-height: 1.45; }
-  .hint kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel2); }
-  input[type=range] { width: 100%; accent-color: var(--accent); }
-  label.check { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; cursor: pointer; }
-  .jog { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-  .jog button { padding: 14px 0; font-size: 15px; font-weight: 600; }
-  .jog button.active { background: var(--accent); border-color: var(--accent); }
-  .led { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--panel); border: 1px solid var(--line); vertical-align: 1px; }
-  .led.hit { background: var(--bad); border-color: var(--bad); box-shadow: 0 0 8px var(--bad); }
-  .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 12px; }
-  .kv dt { color: var(--muted); } .kv dd { margin: 0; overflow-wrap: anywhere; }
-  .chart { position: relative; height: 150px; margin-bottom: 10px; }
-  .chart:last-child { margin-bottom: 0; }
+  #estop:hover { box-shadow: 0 2px 4px rgba(0,0,0,.25), 0 6px 14px 4px rgba(179,38,30,.25); }
+
+  /* ---------- layout: everything fits the window, nothing scrolls ---------- */
+  main { min-height: 0; min-width: 0; display: grid; gap: 12px; padding: 12px;
+    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(320px, 360px);
+    grid-template-areas: "live charts controls"; }
+  .pane { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  #pane-live { grid-area: live; } #pane-charts { grid-area: charts; } #pane-controls { grid-area: controls; }
+  .card { background: var(--surface-card); border-radius: 16px; box-shadow: var(--shadow-1); padding: 14px 16px;
+    min-height: 0; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .card-title { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 14px; font-weight: 500;
+    color: var(--on-surface-variant); flex: none; }
+  .card-title .sub { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .fill { flex: 1 1 0; }
+
+  .readouts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: none; }
+  .ro { background: var(--surface-low); border-radius: 12px; padding: 8px 12px; min-width: 0; }
+  .ro .k { font-size: 12px; color: var(--on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ro .v { font-size: 20px; font-weight: 400; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ro .v small { font-size: 12px; color: var(--muted); margin-left: 3px; }
+  .ro.hit { background: var(--error-container); color: var(--on-error-container); }
+  .rig { flex: 1 1 0; min-height: 120px; margin-top: 10px; border-radius: 12px; background: var(--surface-low); }
+
+  .charts { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+  .chart { flex: 1 1 0; min-height: 0; position: relative; }
   canvas { display: block; width: 100%; height: 100%; }
-  #rig-wrap { height: 230px; }
+
+  /* tabs */
+  .tabs { display: flex; flex: none; border-bottom: 1px solid var(--outline-variant); margin: -4px -16px 12px; padding: 0 8px; }
+  .tab { flex: 1; height: 44px; border-radius: 0; background: transparent; color: var(--on-surface-variant); padding: 0 8px; }
+  .tab[aria-selected="true"] { color: var(--primary); }
+  .tab[aria-selected="true"]::before { content: ""; position: absolute; left: 22%; right: 22%; bottom: 0; height: 3px;
+    border-radius: 3px 3px 0 0; background: var(--primary); }
+  .tabpanel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+
+  .row { display: flex; gap: 8px; align-items: center; flex: none; min-width: 0; }
+  .row > button { flex: 1; min-width: 0; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; }
+  .label { font-size: 12px; font-weight: 500; color: var(--on-surface-variant); letter-spacing: .02em; }
+  .hint { color: var(--muted); font-size: 12px; margin: 0; line-height: 1.4; flex: none; }
+  .hint kbd { font-family: inherit; font-size: 11px; padding: 0 5px; border: 1px solid var(--outline-variant); border-radius: 4px; background: var(--surface-low); }
+  .note { background: var(--surface-low); border-radius: 12px; padding: 8px 12px; font-size: 12px; color: var(--on-surface-variant);
+    white-space: pre-line; flex: none; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+  .note.ok { background: var(--tertiary-container); color: var(--on-tertiary-container); }
+  .note.warn { background: var(--warn-container); color: var(--on-warn-container); }
+  .divider { height: 1px; background: var(--outline-variant); flex: none; margin: 2px 0; }
+
+  input[type=range] { width: 100%; accent-color: var(--primary); height: 24px; margin: 0; }
+  .jog { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: none; }
+  .jog button { height: 64px; border-radius: 16px; font-size: 16px; background: var(--primary-container); color: var(--on-primary-container); }
+  .jog button.active { background: var(--primary); color: var(--on-primary); }
+
+  /* M3 switch */
+  .switch { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 13px; color: var(--on-surface); flex: none; }
+  .switch input { appearance: none; -webkit-appearance: none; margin: 0; flex: none; width: 52px; height: 32px; border-radius: 16px;
+    background: var(--surface-highest); border: 2px solid var(--outline); position: relative; cursor: pointer; transition: background .15s; }
+  .switch input::before { content: ""; position: absolute; top: 50%; left: 6px; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--outline); transform: translateY(-50%); transition: all .15s; }
+  .switch input:checked { background: var(--error); border-color: var(--error); }
+  .switch input:checked::before { left: 22px; width: 24px; height: 24px; background: #fff; }
+
+  .kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 12px; margin: 0; flex: none; }
+  .kv dt { color: var(--on-surface-variant); } .kv dd { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* snackbar + offline banner */
   #toast {
-    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(20px); opacity: 0;
-    background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px;
-    transition: opacity .15s, transform .15s; pointer-events: none; max-width: calc(100vw - 32px); z-index: 10;
+    position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); opacity: 0; z-index: 20;
+    background: var(--inverse-surface); color: var(--inverse-on-surface); border-radius: 4px; padding: 14px 16px;
+    box-shadow: var(--shadow-3); transition: opacity .15s, transform .15s; pointer-events: none; max-width: min(560px, calc(100vw - 32px));
   }
-  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  #toast.err { border-color: var(--bad); }
-  #offline { display: none; background: var(--bad); color: #fff; text-align: center; padding: 6px; font-weight: 600; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.err { border-left: 4px solid #f2b8b5; }
+  #offline { position: fixed; top: 72px; left: 50%; transform: translateX(-50%); z-index: 15; display: none;
+    background: var(--error); color: var(--on-error); border-radius: 8px; padding: 8px 16px; font-weight: 500; box-shadow: var(--shadow-3); }
   #offline.show { display: block; }
+
+  /* bottom navigation, only on small screens */
+  nav.bottom { display: none; }
+
+  /* ---------- medium: two columns, live state above the charts ---------- */
+  @media (max-width: 1239px) {
+    main { grid-template-columns: minmax(0, 1fr) minmax(320px, 360px); grid-template-rows: auto minmax(0, 1fr);
+      grid-template-areas: "live controls" "charts controls"; }
+    #pane-live .card { flex-direction: row; gap: 12px; flex: none; height: 176px; }
+    #pane-live .readouts { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; flex: 2.4 1 0; gap: 6px; }
+    #pane-live .ro { padding: 6px 10px; }
+    #pane-live .ro .k { font-size: 11px; }
+    #pane-live .card-title { display: none; }
+    .rig { margin-top: 0; min-height: 0; }
+    .ro .v { font-size: 15px; }
+    .ro .v small { font-size: 10px; margin-left: 2px; }
+  }
+
+  /* ---------- small or short screens: one pane at a time + bottom navigation ---------- */
+  @media (max-width: 759px), (max-height: 579px) {
+    main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "only"; padding: 8px; }
+    #pane-live, #pane-charts, #pane-controls { grid-area: only; display: none; }
+    body[data-view="live"] #pane-live, body[data-view="charts"] #pane-charts, body[data-view="controls"] #pane-controls { display: flex; }
+    #pane-live .card { flex-direction: column; height: auto; flex: 1 1 0; }
+    #pane-live .readouts { grid-template-columns: 1fr 1fr; flex: none; }
+    .rig { margin-top: 10px; }
+    nav.bottom { display: flex; height: 64px; background: var(--surface-low); border-top: 1px solid var(--outline-variant); }
+    nav.bottom button { flex: 1; height: 100%; border-radius: 0; flex-direction: column; gap: 2px; font-size: 12px;
+      background: transparent; color: var(--on-surface-variant); padding: 0; }
+    nav.bottom button svg { width: 24px; height: 24px; padding: 2px 16px; box-sizing: content-box; border-radius: 16px; }
+    nav.bottom button[aria-selected="true"] { color: var(--on-surface); }
+    nav.bottom button[aria-selected="true"] svg { background: var(--secondary-container); }
+    .appbar { height: 56px; padding: 0 8px 0 12px; }
+    .brand h1 { font-size: 16px; }
+    .brand .logo, .hide-sm { display: none; }
+    #estop { height: 40px; padding: 0 14px; }
+    .jog button { height: 52px; }
+  }
+  @media (max-width: 480px) { .chips .chip:not(#link-pill) { display: none; } }
+  @media (max-height: 579px) {  /* landscape phones: drop the one-line hints, keep every control */
+    .tabpanel[data-panel="jog"] .hint { display: none; }
+    .jog button { height: 44px; }
+    .tabpanel { gap: 8px; }
+  }
 </style>
 </head>
-<body>
-<header>
-  <h1>Cartpole Rig</h1>
-  <span class="pill" id="link-pill"><span class="dot"></span><span id="link-text">—</span></span>
-  <span class="pill" id="control-pill">manual</span>
-  <span class="pill" id="safety-pill" hidden></span>
-  <span class="pill mono" id="rate-pill">— Hz</span>
-  <span class="pill" id="rec-pill" hidden><span class="dot" style="background:var(--bad)"></span>REC</span>
-  <span class="spacer"></span>
-  <button id="btn-connect">Connect</button>
-  <button id="btn-disconnect">Disconnect</button>
-  <button id="estop" title="Space or Esc">E-STOP</button>
+<body data-view="live">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-rig" viewBox="0 0 24 24"><path d="M3 18h18v2H3zm4-5h10v3H7zm4.2-9.8 1.4 1.4-1.6 6.4H9.9z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M17 7h-4v2h4a3 3 0 0 1 0 6h-4v2h4a5 5 0 0 0 0-10zm-6 8H7a3 3 0 0 1 0-6h4V7H7a5 5 0 0 0 0 10h4zm-3-4h8v2H8z"/></symbol>
+  <symbol id="i-unlink" viewBox="0 0 24 24"><path d="M17 7h-4v2h4a3 3 0 0 1 1.3 5.7l1.4 1.4A5 5 0 0 0 17 7zM2 4.3l3.1 3.1A5 5 0 0 0 7 17h4v-2H7a3 3 0 0 1-.4-6l2 2H8v2h2.6l2 2H13v2h1.6l4.1 4.1 1.4-1.4L3.4 2.9z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><path d="M15.7 3H8.3L3 8.3v7.4L8.3 21h7.4l5.3-5.3V8.3zM17 15.7 15.7 17 12 13.3 8.3 17 7 15.7l3.7-3.7L7 8.3 8.3 7l3.7 3.7L15.7 7 17 8.3 13.3 12z"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6z"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></symbol>
+  <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M21 6H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1zm-1 10H4V8h2v4h2V8h2v4h2V8h2v4h2V8h2v4h2z"/></symbol>
+  <symbol id="i-zero" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.6 0-.6-.3-.4-.6L13 3h1l-1 7h3.5c.5 0 .6.3.4.6z"/></symbol>
+  <symbol id="i-clear" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-2 15-5-5 1.4-1.4 3.6 3.6 7.6-7.6L19 8z"/></symbol>
+  <symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></symbol>
+  <symbol id="i-lift" viewBox="0 0 24 24"><path d="M4 12l1.4 1.4L11 7.8V20h2V7.8l5.6 5.6L20 12l-8-8z"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3.5 18.5 9.5 12.5l4 4L22 6.9 20.6 5.5l-7.1 8-4-4L2 17z"/></symbol>
+  <symbol id="i-tune" viewBox="0 0 24 24"><path d="M3 17v2h6v-2zM3 5v2h10V5zm10 16v-2h8v-2h-8v-2h-2v6zM7 9v2H3v2h4v2h2V9zm14 4v-2H11v2zm-6-4h2V7h4V5h-4V3h-2z"/></symbol>
+</svg>
+
+<header class="appbar">
+  <div class="brand"><div class="logo"><svg class="i"><use href="#i-rig"/></svg></div><h1>Cartpole Rig</h1></div>
+  <div class="chips">
+    <span class="chip" id="link-pill"><span class="dot"></span><span id="link-text">—</span></span>
+    <span class="chip" id="control-pill">manual</span>
+    <span class="chip" id="safety-pill" hidden></span>
+    <span class="chip mono" id="rate-pill">— Hz</span>
+    <span class="chip rec" id="rec-pill" hidden><span class="dot"></span>REC</span>
+  </div>
+  <div class="bar-actions">
+    <button id="btn-connect" class="text hide-sm" title="Connect to the Pico"><svg class="i"><use href="#i-link"/></svg>Connect</button>
+    <button id="btn-disconnect" class="text hide-sm" title="Disconnect from the Pico (motor to 0)"><svg class="i"><use href="#i-unlink"/></svg>Disconnect</button>
+    <button id="estop" title="E-STOP: motor to 0, policy and homing stopped (Space or Esc)"><svg class="i"><use href="#i-stop"/></svg>E-STOP</button>
+  </div>
 </header>
 <div id="offline">UI server unreachable — reconnecting…</div>
 
 <main>
-  <section>
-    <div class="card">
-      <h2>Live state</h2>
+  <section class="pane" id="pane-live">
+    <div class="card fill">
+      <div class="card-title">Live state</div>
       <div class="readouts mono">
         <div class="ro"><div class="k">θ pole angle</div><div class="v" id="ro-theta">—</div></div>
         <div class="ro"><div class="k">θ̇ pole rate</div><div class="v" id="ro-dtheta">—</div></div>
-        <div class="ro"><div class="k">x cart position (from steps)</div><div class="v" id="ro-x">—</div></div>
-        <div class="ro"><div class="k">ẋ cart velocity (from steps)</div><div class="v" id="ro-dx">—</div></div>
+        <div class="ro" title="Counted from the steps the Pico sends (no position sensor)"><div class="k">x cart position</div><div class="v" id="ro-x">—</div></div>
+        <div class="ro"><div class="k">ẋ cart velocity</div><div class="v" id="ro-dx">—</div></div>
         <div class="ro"><div class="k">encoder ticks</div><div class="v" id="ro-ticks">—</div></div>
         <div class="ro"><div class="k">cart steps</div><div class="v" id="ro-steps">—</div></div>
         <div class="ro"><div class="k">step rate sent</div><div class="v" id="ro-cmd">—</div></div>
-        <div class="ro"><div class="k">limit switch</div><div class="v"><span class="led" id="ro-limit"></span> <span id="ro-limit-text">—</span></div></div>
+        <div class="ro" id="ro-limit-tile"><div class="k">limit switch</div><div class="v" id="ro-limit-text">—</div></div>
       </div>
-      <div id="rig-wrap" class="chart" style="margin-top:12px"><canvas id="rig"></canvas></div>
-      <p class="hint">Drawing: +θ leans toward +x. Compare with the sim's sign convention.</p>
-      <p class="hint">x and ẋ are counted from the steps the Pico commands. The stepper has no position
-        sensor, so pushing the cart by hand doesn't change them, and skipped steps make x drift.
-        After moving the cart by hand, run <b>Home &amp; measure track</b> again.</p>
-    </div>
-
-    <div class="card">
-      <h2>Manual jog</h2>
-      <div class="row"><span class="grow">Speed</span><span class="mono" id="speed-text">—</span></div>
-      <input type="range" id="speed" min="0.005" max="0.4" step="0.005" value="0.05">
-      <div class="jog">
-        <button id="jog-neg">◀ −x</button>
-        <button id="jog-pos">+x ▶</button>
-      </div>
-      <p class="hint">Hold to move, release to stop. Keys: hold <kbd>←</kbd> <kbd>→</kbd>, <kbd>Space</kbd>/<kbd>Esc</kbd> = E-stop.
-        The limit switches stop the cart; it can always move away from a pressed one.</p>
-      <div class="row" style="margin-top:10px">
-        <button id="btn-home" class="grow">Home</button>
-        <button id="btn-calibrate" class="grow">Calibrate track</button>
-      </div>
-      <div class="row">
-        <button id="btn-reset" class="grow">Reset counters (zero x &amp; θ)</button>
-      </div>
-      <p class="hint" id="reset-hint"></p>
-      <p class="hint mono" id="cal-text" style="white-space: pre-line"></p>
-      <p class="hint"><b>Home</b> (also runs by itself whenever the Pico connects): left switch, then half the measured
-        track, so x = 0 is the centre. <b>Calibrate track</b> measures the track: left switch, right switch, twice, then
-        parks in the middle; run it after changing the rail, pulley or microstepping. Both use the speed above. The
-        travel is the real track length; if a tape measure disagrees, <code>steps_per_meter</code> is wrong.
-        Once homed, <b>Reset counters</b> zeroes θ only.</p>
-    </div>
-
-    <div class="card">
-      <h2>Policy</h2>
-      <dl class="kv mono" id="policy-info"></dl>
-      <div class="row" style="margin-top:10px">
-        <button id="btn-dry" class="grow">Start dry run</button>
-        <button id="btn-stop-policy" class="grow">Stop policy</button>
-      </div>
-      <div class="row">
-        <label class="check grow"><input type="checkbox" id="arm"> Armed: track clear, hand on the pole</label>
-      </div>
-      <div class="row">
-        <button id="btn-live" class="danger grow">Start LIVE</button>
-        <button id="btn-clear" class="grow">Clear fault</button>
-      </div>
-      <p class="hint">Dry run: the policy computes commands but the motor stays at 0 (the <span style="color:var(--pol)">policy</span> trace shows what it would send).
-        It takes over once |θ| &lt; <span id="engage-deg">—</span>°.</p>
-    </div>
-
-    <div class="card">
-      <h2>Recording</h2>
-      <div class="row"><button id="btn-rec" class="grow">Start recording CSV</button></div>
-      <p class="hint mono" id="rec-path">Not recording.</p>
-    </div>
-
-    <div class="card" id="sim-card" hidden>
-      <h2>Simulator</h2>
-      <div class="row"><button id="btn-lift" class="grow">Lift pole upright</button></div>
-      <p class="hint">Running with <span class="mono">--fake</span>: no hardware attached.</p>
+      <div class="rig" title="+θ leans toward +x; compare with the sim's sign convention"><canvas id="rig"></canvas></div>
     </div>
   </section>
 
-  <section>
-    <div class="card">
-      <h2>Telemetry — last 10 s</h2>
-      <div class="chart"><canvas id="c-theta"></canvas></div>
-      <div class="chart"><canvas id="c-dtheta"></canvas></div>
-      <div class="chart"><canvas id="c-x"></canvas></div>
-      <div class="chart"><canvas id="c-dx"></canvas></div>
-      <div class="chart"><canvas id="c-cmd"></canvas></div>
+  <section class="pane" id="pane-charts">
+    <div class="card fill">
+      <div class="card-title">Telemetry<span class="sub">last 10 s</span></div>
+      <div class="charts">
+        <div class="chart"><canvas id="c-theta"></canvas></div>
+        <div class="chart"><canvas id="c-dtheta"></canvas></div>
+        <div class="chart"><canvas id="c-x"></canvas></div>
+        <div class="chart"><canvas id="c-dx"></canvas></div>
+        <div class="chart"><canvas id="c-cmd"></canvas></div>
+      </div>
     </div>
-    <div class="card">
-      <h2>Loop health</h2>
-      <dl class="kv mono">
-        <dt>loop rate</dt><dd id="h-rate">—</dd>
-        <dt>late ticks</dt><dd id="h-late">—</dd>
-        <dt>missed replies</dt><dd id="h-missed">—</dd>
-        <dt>last error</dt><dd id="h-error">—</dd>
-      </dl>
+  </section>
+
+  <section class="pane" id="pane-controls">
+    <div class="card fill">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-tab="jog" aria-selected="true">Jog &amp; home</button>
+        <button class="tab" role="tab" data-tab="policy" aria-selected="false">Policy</button>
+        <button class="tab" role="tab" data-tab="system" aria-selected="false">System</button>
+      </div>
+
+      <div class="tabpanel" data-panel="jog">
+        <div class="row"><span class="label" style="flex:1">Speed</span><span class="mono label" id="speed-text">—</span></div>
+        <input type="range" id="speed" min="0.005" max="0.4" step="0.005" value="0.05" aria-label="Jog and homing speed">
+        <div class="jog">
+          <button id="jog-neg" title="Hold to move (or hold ←)"><svg class="i"><use href="#i-left"/></svg>−x</button>
+          <button id="jog-pos" title="Hold to move (or hold →)">+x<svg class="i"><use href="#i-right"/></svg></button>
+        </div>
+        <p class="hint">Hold to move. <kbd>←</kbd> <kbd>→</kbd> jog, <kbd>Space</kbd>/<kbd>Esc</kbd> E-STOP. The limit switches stop the cart.</p>
+        <div class="divider"></div>
+        <div class="row">
+          <button id="btn-home" class="filled" title="Left switch, then half the measured track: x = 0 is the centre. Also runs by itself whenever the Pico connects.">
+            <svg class="i"><use href="#i-home"/></svg>Home</button>
+          <button id="btn-calibrate" class="outlined" title="Measure the track: left switch, right switch, twice, then park in the middle. Run it after changing the rail, pulley or microstepping.">
+            <svg class="i"><use href="#i-ruler"/></svg>Calibrate track</button>
+        </div>
+        <div class="row">
+          <button id="btn-reset" title=""><svg class="i"><use href="#i-zero"/></svg><span id="btn-reset-text">Reset counters</span></button>
+        </div>
+        <p class="hint" id="reset-hint"></p>
+        <div class="note" id="cal-text">Track not measured yet.</div>
+      </div>
+
+      <div class="tabpanel" data-panel="policy" hidden>
+        <dl class="kv mono" id="policy-info"></dl>
+        <div class="divider"></div>
+        <div class="row">
+          <button id="btn-dry" class="outlined" title="The policy computes commands but the motor stays at 0"><svg class="i"><use href="#i-play"/></svg>Dry run</button>
+          <button id="btn-stop-policy"><svg class="i"><use href="#i-pause"/></svg>Stop policy</button>
+        </div>
+        <label class="switch"><input type="checkbox" id="arm"> Armed: track clear, hand on the pole</label>
+        <div class="row">
+          <button id="btn-live" class="danger"><svg class="i"><use href="#i-bolt"/></svg>Start LIVE</button>
+          <button id="btn-clear" class="outlined"><svg class="i"><use href="#i-clear"/></svg>Clear fault</button>
+        </div>
+        <p class="hint">Dry run: motor stays at 0 (the <span style="color:var(--pol)">policy</span> trace shows what it would send).
+          It takes over once |θ| &lt; <span id="engage-deg">—</span>°.</p>
+      </div>
+
+      <div class="tabpanel" data-panel="system" hidden>
+        <div class="label">Recording</div>
+        <div class="row"><button id="btn-rec" class="outlined"><svg class="i"><use href="#i-rec"/></svg><span id="btn-rec-text">Start recording CSV</span></button></div>
+        <p class="hint mono" id="rec-path" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Not recording.</p>
+        <div class="divider"></div>
+        <div class="label">Loop health</div>
+        <dl class="kv mono">
+          <dt>loop rate</dt><dd id="h-rate">—</dd>
+          <dt>late ticks</dt><dd id="h-late">—</dd>
+          <dt>missed replies</dt><dd id="h-missed">—</dd>
+          <dt>last error</dt><dd id="h-error" title="">—</dd>
+        </dl>
+        <div class="row">
+          <button id="btn-connect-2" class="outlined"><svg class="i"><use href="#i-link"/></svg>Connect</button>
+          <button id="btn-disconnect-2" class="outlined"><svg class="i"><use href="#i-unlink"/></svg>Disconnect</button>
+        </div>
+        <div id="sim-card" hidden style="display:flex;flex-direction:column;gap:8px">
+          <div class="divider"></div>
+          <div class="label">Simulator (--fake, no hardware)</div>
+          <div class="row"><button id="btn-lift"><svg class="i"><use href="#i-lift"/></svg>Lift pole upright</button></div>
+        </div>
+      </div>
     </div>
   </section>
 </main>
+
+<nav class="bottom" role="tablist">
+  <button data-view="live" aria-selected="true"><svg><use href="#i-rig"/></svg>Live</button>
+  <button data-view="charts" aria-selected="false"><svg><use href="#i-chart"/></svg>Charts</button>
+  <button data-view="controls" aria-selected="false"><svg><use href="#i-tune"/></svg>Control</button>
+</nav>
 <div id="toast"></div>
 
 <script>
@@ -203,6 +362,7 @@ const WINDOW_S = 10;
 const $ = (id) => document.getElementById(id);
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const DEG = 180 / Math.PI;
+const FONT = '11px Roboto, "Segoe UI", system-ui, sans-serif';
 
 let info = null, status = null, online = false;
 const homed = () => !!(status && status.track && status.track.homed);
@@ -278,11 +438,12 @@ class StripChart extends Canvas2D {
   constructor(canvas, opts) { super(canvas); this.o = opts; }
   draw(data) {
     const { ctx, w, h, o } = this;
-    const padL = 46, padR = 8, padT = 20, padB = 6, pw = w - padL - padR, ph = h - padT - padB;
+    if (w < 2 || h < 2) return;  // hidden pane
+    const padL = 48, padR = 8, padT = 20, padB = 4, pw = w - padL - padR, ph = h - padT - padB;
     ctx.clearRect(0, 0, w, h);
-    ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = FONT;
     ctx.textBaseline = "top"; ctx.textAlign = "left"; ctx.fillStyle = cssVar("--muted");
-    ctx.fillText(o.title, padL, 3);
+    ctx.font = '500 ' + FONT; ctx.fillText(o.title, padL, 3); ctx.font = FONT;
 
     const tEnd = data.length ? data[data.length - 1].t : 0, tStart = tEnd - WINDOW_S;
     let m = typeof o.minSpan === "function" ? o.minSpan() : o.minSpan;
@@ -292,7 +453,7 @@ class StripChart extends Canvas2D {
     }
     const lo = -m * 1.12, hi = m * 1.12, Y = (v) => padT + (hi - v) / (hi - lo) * ph;
 
-    const step = niceStep(hi - lo, 4), digits = Math.max(0, -Math.floor(Math.log10(step)));
+    const step = niceStep(hi - lo, Math.max(2, Math.min(4, ph / 24))), digits = Math.max(0, -Math.floor(Math.log10(step)));
     ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.lineWidth = 1;
     for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) {
       const y = Math.round(Y(v)) + 0.5, zero = Math.abs(v) < step / 2;
@@ -308,7 +469,7 @@ class StripChart extends Canvas2D {
       ctx.setLineDash([]);
     }
 
-    ctx.lineWidth = 1.6; ctx.lineJoin = "round";
+    ctx.lineWidth = 2; ctx.lineJoin = "round";
     for (const se of o.series) {
       ctx.strokeStyle = cssVar(se.color); ctx.beginPath();
       let pen = false, prev = null;
@@ -325,7 +486,7 @@ class StripChart extends Canvas2D {
       ctx.stroke();
     }
 
-    ctx.textAlign = "right"; ctx.textBaseline = "top";
+    ctx.textAlign = "right"; ctx.textBaseline = "top"; ctx.font = '500 ' + FONT;
     let lx = w - padR;
     const last = data[data.length - 1];
     for (const se of [...o.series].reverse()) {
@@ -340,6 +501,7 @@ class StripChart extends Canvas2D {
 class RigView extends Canvas2D {
   draw(s) {
     const { ctx, w, h } = this;
+    if (w < 2 || h < 2) return;
     ctx.clearRect(0, 0, w, h);
     // Once homed, draw the measured rail with the switches at its ends; before that x = 0 is
     // just the reset position, so show +/-0.3 m, widened whenever the cart goes further.
@@ -347,36 +509,36 @@ class RigView extends Canvas2D {
     if (tr) this.half = tr.half_m * 1.08;
     else this.half = Math.max(this.half || 0.3, Math.abs(s && s.ok ? s.x : 0) * 1.15);
     const half = this.half, edge = tr ? tr.half_m : +(half / 1.15).toFixed(2);
-    const sx = (x) => w / 2 + (x / half) * (w / 2 - 20), railY = h / 2 + 6;
+    const sx = (x) => w / 2 + (x / half) * (w / 2 - 20), railY = Math.round(h / 2 + 6);
 
-    ctx.strokeStyle = cssVar("--line"); ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(tr ? sx(-edge) : 10, railY); ctx.lineTo(tr ? sx(edge) : w - 10, railY); ctx.stroke();
+    ctx.strokeStyle = cssVar("--line"); ctx.lineWidth = 4; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(tr ? sx(-edge) : 12, railY); ctx.lineTo(tr ? sx(edge) : w - 12, railY); ctx.stroke();
     if (tr) {  // limit switches: the left one is at -x unless cart_sign flips it
       const lim = s ? s.limits || 0 : 0, leftAt = info && info.cart_sign < 0 ? 1 : -1;
       for (const [bit, side] of [[1, leftAt], [2, -leftAt]]) {
         ctx.fillStyle = cssVar(lim & bit ? "--bad" : "--muted");
-        ctx.fillRect(sx(side * edge) - (side < 0 ? 6 : 0), railY - 10, 6, 20);
+        ctx.beginPath(); ctx.roundRect(sx(side * edge) - (side < 0 ? 7 : 0), railY - 11, 7, 22, 2); ctx.fill();
       }
     }
-    ctx.fillStyle = cssVar("--muted"); ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillStyle = cssVar("--muted"); ctx.font = FONT;
     ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-    ctx.fillText(tr ? "x = 0 (centre)" : "x = 0", sx(0), h - 2);
-    ctx.fillText(`+${edge.toFixed(3)} m`, sx(edge), h - 2);
-    ctx.fillText(`−${edge.toFixed(3)} m`, sx(-edge), h - 2);
+    ctx.fillText(tr ? "x = 0 (centre)" : "x = 0", sx(0), h - 3);
+    ctx.textAlign = "left"; ctx.fillText(`−${edge.toFixed(3)} m`, 6, h - 3);
+    ctx.textAlign = "right"; ctx.fillText(`+${edge.toFixed(3)} m`, w - 6, h - 3);
 
     if (!s || !s.ok) {
-      ctx.fillText("no data", w / 2, 10);
+      ctx.textAlign = "center"; ctx.fillText("no data", w / 2, h / 2);
       return;
     }
-    const cx = sx(s.x), cy = railY - 9, L = Math.min(h / 2 - 28, 90);
+    const cx = sx(s.x), cy = railY - 10, L = Math.max(12, Math.min(h / 2 - 30, w / 3, 140));
     const eng = (info ? info.engage_deg : 15) / DEG;
-    ctx.fillStyle = "rgba(63,185,80,0.10)";  // engage cone
+    ctx.fillStyle = "rgba(24,128,56,0.12)";  // engage cone
     ctx.beginPath(); ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, L + 8, -Math.PI / 2 - eng, -Math.PI / 2 + eng); ctx.closePath(); ctx.fill();
 
-    ctx.fillStyle = s.limit ? cssVar("--bad") : cssVar("--panel2");
-    ctx.strokeStyle = cssVar("--muted"); ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.roundRect(cx - 26, cy - 11, 52, 22, 4); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = s.limit ? cssVar("--bad") : "#ffffff";
+    ctx.strokeStyle = cssVar("--outline"); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(cx - 26, cy - 11, 52, 22, 6); ctx.fill(); ctx.stroke();
 
     const tx = cx + L * Math.sin(s.theta), ty = cy - L * Math.cos(s.theta);
     ctx.strokeStyle = cssVar("--theta"); ctx.lineWidth = 5; ctx.lineCap = "round";
@@ -393,10 +555,11 @@ const charts = [
   new StripChart($("c-dtheta"), { title: "Pole rate θ̇ (rad/s)", minSpan: 1,
     series: [{ label: "θ̇", color: "--omega", get: (s) => s.dtheta }] }),
   new StripChart($("c-x"), { title: "Cart position x (m)", minSpan: 0.25,
+    marks: () => homed() ? [-status.track.half_m, status.track.half_m] : [],
     series: [{ label: "x", color: "--x", digits: 3, get: (s) => s.x }] }),
   new StripChart($("c-dx"), { title: "Cart velocity ẋ (m/s)", minSpan: 0.05,
     series: [{ label: "ẋ", color: "--dx", digits: 3, get: (s) => s.dx }] }),
-  new StripChart($("c-cmd"), { title: "Step rate (half-steps/s)", minSpan: 200,
+  new StripChart($("c-cmd"), { title: "Step rate (steps/s)", minSpan: 200,
     series: [
       { label: "sent", color: "--cmd", digits: 0, get: (s) => s.cmd },
       { label: "policy", color: "--pol", digits: 0, get: (s) => s.policy_rate },
@@ -416,14 +579,15 @@ function renderReadouts(s) {
   $("ro-ticks").textContent = ok ? s.ticks : "—";
   $("ro-steps").textContent = ok ? s.steps : "—";
   $("ro-cmd").textContent = s ? s.cmd : "—";
-  $("ro-limit").classList.toggle("hit", !!(s && s.limit));
+  $("ro-limit-tile").classList.toggle("hit", !!(s && s.limit));
   const lim = s ? s.limits || 0 : 0;
   $("ro-limit-text").textContent = !s ? "—" : !s.limit ? "clear" : lim === 3 ? "BOTH" : lim === 2 ? "RIGHT" : "LEFT";
 }
 
 function setPill(id, text, cls) {
   const el = $(id);
-  el.className = "pill " + (cls || "");
+  el.className = "chip " + (cls || "");
+  el.title = text;
   const label = el.querySelector("span:last-child");
   (label || el).textContent = text;
 }
@@ -434,7 +598,8 @@ function renderStatus() {
   setPill("link-pill", info && info.fake ? `${link} (sim)` : link,
     { connected: "ok", connecting: "warn", error: "bad" }[link] || "");
   const ctl = status.control;
-  setPill("control-pill", ctl === "live" ? "LIVE" : ctl, ctl === "live" ? "live" : ctl === "dry-run" ? "dry" : "");
+  setPill("control-pill", ctl === "live" ? "LIVE" : ctl,
+    { live: "live", "dry-run": "dry", calibrating: "cal" }[ctl] || "");
   const last = samples[samples.length - 1];
   const safety = last && last.safety;
   $("safety-pill").hidden = !safety;
@@ -446,28 +611,31 @@ function renderStatus() {
   $("h-rate").textContent = connected ? `${status.rate_hz.toFixed(1)} Hz (target ${info ? info.rate_hz : "?"})` : "—";
   $("h-late").textContent = status.late_ticks;
   $("h-missed").textContent = status.missed_reads;
-  $("h-error").textContent = status.error || "—";
+  $("h-error").textContent = $("h-error").title = status.error || "—";
 
   const manual = ctl === "manual", policyOn = !manual;
-  $("btn-connect").disabled = connected || link === "connecting";
-  $("btn-disconnect").disabled = !connected;
+  $("btn-connect").disabled = $("btn-connect-2").disabled = connected || link === "connecting";
+  $("btn-disconnect").disabled = $("btn-disconnect-2").disabled = !connected;
   $("btn-reset").disabled = !connected || ctl === "calibrating";
-  $("btn-reset").textContent = homed() ? "Zero θ (pole hanging still)" : "Reset counters (zero x & θ)";
+  $("btn-reset-text").textContent = homed() ? "Zero θ (pole hanging still)" : "Reset counters (zero x & θ)";
   $("btn-home").disabled = $("btn-calibrate").disabled = !connected || !manual;
-  $("btn-home").textContent = status.track ? "Home" : "Home (measures the track first)";
-  const tr = status.track;
-  $("cal-text").textContent = (status.calibration ? status.calibration + "\n" : "") + (tr
-    ? `Track: ${tr.travel_steps} steps = ${tr.length_m.toFixed(3)} m at ${tr.steps_per_meter} steps/m` +
-      ` (passes ${tr.passes.join(", ")}). ${tr.homed ? "Homed: x = 0 is the centre." : "Not homed since the last connect."}`
+  $("btn-home").title = status.track
+    ? "Left switch, then half the measured track: x = 0 is the centre. Also runs by itself whenever the Pico connects."
+    : "No track measured yet: this runs a full calibration first.";
+  const tr = status.track, cal = $("cal-text");
+  cal.textContent = (status.calibration ? status.calibration + "\n" : "") + (tr
+    ? `Track ${tr.length_m.toFixed(3)} m (${tr.travel_steps} steps, passes ${tr.passes.join(" / ")}). ` +
+      (tr.homed ? "" : "Not homed since the last connect.")
     : "Track not measured yet.");
+  cal.className = "note " + (ctl === "calibrating" ? "warn" : tr && tr.homed ? "ok" : "");
   $("jog-neg").disabled = $("jog-pos").disabled = !connected || !manual;
   $("btn-dry").disabled = !connected || ctl === "dry-run" || !status.model_exists;
   $("btn-live").disabled = !connected || ctl === "live" || !status.model_exists || !$("arm").checked;
   $("btn-stop-policy").disabled = !policyOn;
   $("btn-clear").disabled = !(policyOn && safety === "fault");
-  $("btn-rec").textContent = status.recording ? "Stop recording" : "Start recording CSV";
+  $("btn-rec-text").textContent = status.recording ? "Stop recording" : "Start recording CSV";
   $("btn-rec").classList.toggle("on", !!status.recording);
-  $("rec-path").textContent = status.recording ? status.recording : "Not recording.";
+  $("rec-path").textContent = $("rec-path").title = status.recording ? status.recording : "Not recording.";
   $("btn-lift").disabled = !connected;
   if (!status.model_exists) $("pi-model").innerHTML = `<span style="color:var(--warn)">missing</span> ${info.model_path}`;
   else $("pi-model").textContent = info.model_path;
@@ -480,6 +648,17 @@ function frame() {
   renderReadouts(last);
   requestAnimationFrame(frame);
 }
+
+// ---------- navigation (control tabs; bottom bar on small screens) ----------
+function selectTab(name) {
+  for (const t of document.querySelectorAll(".tab")) t.setAttribute("aria-selected", t.dataset.tab === name);
+  for (const p of document.querySelectorAll(".tabpanel")) p.hidden = p.dataset.panel !== name;
+}
+for (const t of document.querySelectorAll(".tab")) t.onclick = () => selectTab(t.dataset.tab);
+for (const b of document.querySelectorAll("nav.bottom button")) b.onclick = () => {
+  document.body.dataset.view = b.dataset.view;
+  for (const o of document.querySelectorAll("nav.bottom button")) o.setAttribute("aria-selected", o === b);
+};
 
 // ---------- controls ----------
 let jogDir = 0, jogTimer = null;
@@ -509,7 +688,7 @@ function jogStop() {
 function estop() {
   jogStop();
   api("estop");
-  toast("E-STOP: motor commanded to 0, policy stopped", "err");
+  toast("E-STOP: motor commanded to 0, policy and homing stopped", "err");
 }
 
 for (const [id, dir] of [["jog-neg", -1], ["jog-pos", 1]]) {
@@ -528,8 +707,8 @@ window.addEventListener("blur", jogStop);
 document.addEventListener("visibilitychange", () => { if (document.hidden) jogStop(); });
 
 $("estop").onclick = estop;
-$("btn-connect").onclick = () => api("connect");
-$("btn-disconnect").onclick = () => api("disconnect");
+$("btn-connect").onclick = $("btn-connect-2").onclick = () => api("connect");
+$("btn-disconnect").onclick = $("btn-disconnect-2").onclick = () => api("disconnect");
 $("btn-reset").onclick = () => api("reset");
 $("btn-home").onclick = () => api("home", { speed: speed() });
 $("btn-calibrate").onclick = () => api("calibrate", { speed: speed() });
@@ -564,12 +743,12 @@ $("speed").oninput = () => {
   $("engage-deg").textContent = info.engage_deg;
   $("sim-card").hidden = !info.fake;
   $("reset-hint").textContent = info.angle_zero === "down"
-    ? "Before resetting: let the pole hang straight down and put the cart at track centre."
-    : "Before resetting: hold the pole exactly upright and put the cart at track centre.";
+    ? "Zero θ with the pole hanging straight down and still."
+    : "Zero θ with the pole held exactly upright.";
   $("policy-info").innerHTML = `
-    <dt>model</dt><dd id="pi-model">${info.model_path}</dd>
+    <dt>model</dt><dd id="pi-model" title="${info.model_path}">${info.model_path}</dd>
     <dt>action</dt><dd>${info.action_type}</dd>
-    <dt>obs</dt><dd>[${info.obs_order.join(", ")}]</dd>
+    <dt>obs</dt><dd title="${info.obs_order.join(", ")}">[${info.obs_order.join(", ")}]</dd>
     <dt>rate</dt><dd>${info.rate_hz} Hz</dd>
     <dt>max speed</dt><dd>${info.max_velocity.toFixed(3)} m/s</dd>`;
   openStream();
