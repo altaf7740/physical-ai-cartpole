@@ -1,0 +1,18 @@
+[Unit]
+Description=Cartpole web UI and hardware service
+After=network.target
+
+[Service]
+Type=simple
+User=cartpole
+Group=dialout
+WorkingDirectory=/home/cartpole/physical-ai-cartpole/hardware
+ExecStart=/home/cartpole/physical-ai-cartpole/hardware/.venv/bin/python -u src/main.py --config config.toml ui
+Restart=on-failure
+RestartSec=5
+# SIGTERM makes the service command the motor to 0 before exiting
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
