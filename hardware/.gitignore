@@ -6,3 +6,6 @@ logs/*
 models/*
 !models/.gitkeep
 !models/README.md
+mcp_token
+mcp_tokens.json
+mcp_tokens.tmp

@@ -106,13 +106,14 @@ class HardwareService:
             self._require_connected()
             self._pending.add("reset")
 
-    def jog(self, velocity: float) -> None:
+    def jog(self, velocity: float, duration_s: float | None = None) -> None:
+        """Move at `velocity` m/s for `duration_s` (default [ui] jog_timeout_s, the browser's dead-man)."""
         with self._lock:
             self._require_connected()
             if self._control != MANUAL:
                 raise CommandError("stop the policy before jogging")
             self._jog_velocity = clamp(velocity, self.max_velocity)
-            self._jog_deadline = time.monotonic() + self.cfg.ui.jog_timeout_s
+            self._jog_deadline = time.monotonic() + (duration_s or self.cfg.ui.jog_timeout_s)
 
     def start_calibration(self, speed_mps: float, full: bool = True) -> None:
         """full: measure the track on both switches twice. Otherwise home: left switch, then half the

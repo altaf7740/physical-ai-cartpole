@@ -33,6 +33,7 @@ hardware/                  # on the Pi: ~/physical-ai-cartpole/hardware
 ├── config.toml            # this rig's config (committed)
 ├── config.toml.template   # every key, documented
 ├── track_calibration.json # measured track travel (Calibrate track writes it)
+├── mcp_tokens.json        # MCP access tokens, hashed (made in the UI, not in git)
 ├── requirements.txt
 ├── models/                # put policy.onnx / policy.npz here (placeholder)
 ├── logs/                  # one CSV per run, ui.log
@@ -51,6 +52,10 @@ hardware/                  # on the Pi: ~/physical-ai-cartpole/hardware
     ├── hardware_service.py# UI backend: loop thread owning the Pico, commands, sample buffer
     ├── ui_server.py       # stdlib HTTP server: page, SSE telemetry, POST commands
     ├── ui.html            # the browser UI (no external dependencies)
+    ├── mcp_protocol.py    # MCP JSON-RPC messages (both protocol eras), no I/O
+    ├── mcp_tools.py       # the MCP tools: wrappers over hardware_service, scope tiers
+    ├── mcp_server.py      # POST /mcp: auth, origin check, confirmation, audit log + activity
+    ├── mcp_tokens.py      # named, scoped, expiring access tokens (hashed JSON file)
     ├── fake_pico.py       # simulated Pico + pendulum for --fake
     ├── pico_main.py       # Pico firmware (MicroPython): encoder + PIO step/dir for a TB6600
     └── tests/             # hardware-free unit tests (make test)
@@ -84,6 +89,53 @@ make ui-stop     # Pi: stop the background UI (motor commanded to 0)
   either limit switch and only lets it move away from a pressed one. The server listens on `0.0.0.0:8000` with **no login**, so anyone on the LAN can drive the motor.
   On an untrusted network, set `host = "127.0.0.1"` and use `make ui-remote`.
 - The UI and the CLI commands can't run at the same time, since both need the serial port.
+
+## MCP (AI agents)
+
+The UI server also answers MCP at **`POST /mcp`** (Streamable HTTP, stateless JSON; protocol 2024-11-05 to
+2026-07-28), so an agent such as Claude Code can watch and drive the rig. It shares the UI's
+`HardwareService`: an agent's `emergency_stop` stops a jog from the page and vice versa. Same design as
+I-Vision's MCP server: hand-written JSON-RPC, no extra dependencies.
+
+**AI agents** in the UI's top bar (or System tab, or `http://cartpole-pi.local:8000/#agents`) opens a dialog
+like I-Vision's Agent access page:
+
+- **Access tokens:** the server URL; create a token with a name, access (*Read only* or *Read and move*) and
+  expiry. It is shown once, with the `claude mcp add ...` command to copy. The list shows each token's
+  access, created / last used / expiry, and Revoke.
+- **Activity:** every tool call, newest first and updating live, filterable by result (*Done*, *Asked you
+  first*, *Declined by you*, *Refused*, with the reason), action and token, plus search.
+- While an agent is calling tools, an **Agent** chip appears in the top bar (click it for the activity).
+
+From the Mac without the UI: `make mcp-token NAME=claude-code SCOPE=operate` creates a token and prints it.
+
+| tool | access | what it does |
+|---|---|---|
+| `get_status` | read | link, control mode, faults, loop health, track/homing, latest sample (θ in degrees), next-step hint |
+| `get_rig_info` | read | control rate, engage/disengage angles, max speed, policy and observation config |
+| `get_telemetry` | read | last N s of 60 Hz samples, downsampled, plus max/mean \|θ\|, x range, balancing fraction |
+| `emergency_stop` | read | stop the motor, policy, jog and homing; every token can call it |
+| `home` / `calibrate_track` | operate, moves | the UI's Home / Calibrate track |
+| `jog` | operate, moves | `velocity_mps` for `duration_s` (≤ `max_jog_s`), then stops by itself |
+| `start_balancing` | operate, moves | policy with the motor on (engages once the pole is held near upright) |
+| `start_dry_run` | operate | policy on live sensors, motor off |
+| `reset_counters`, `clear_fault`, `set_recording`, `connect_pico`, `disconnect_pico` | operate | as in the UI (`connect_pico` homes if `home_on_connect`) |
+| `lift_pole` | operate | `--fake` only: put the simulated pole near upright |
+
+`[mcp]` in `config.toml`:
+
+- **Tokens** (`tokens_file`, default `mcp_tokens.json`): only a SHA-256 of each is stored (mode 0600, not in
+  git, kept by `make deploy`). Agents send `Authorization: Bearer cpmcp_...`. Requests carrying a browser
+  `Origin` are refused unless listed in `allowed_origins`, so a web page on the LAN can't call `/mcp`.
+- **`require_confirmation = true`:** tools marked *moves* don't run on the first call. The reply tells the
+  model a confirmation is pending and gives the host a 5-minute token in `result._meta["cartpole/confirm"]`
+  (an HMAC over that token, tool and exact arguments); the host asks the person and repeats the call with
+  it in `params._meta`. 2026-07-28 clients that can show forms get a native elicitation instead. Off by
+  default, as in I-Vision; Claude Code already asks before each tool call unless you allow the tool.
+- **Audit** (`audit_file`): one JSON line per call, kept 90 days; the Activity tab reads it.
+
+The web UI itself still has no login, so anyone who can open it can also create a token, just as they can
+drive the motor from it. The tokens keep programs out of `/mcp` unless someone at the UI let them in.
 
 ## Pico protocol
 

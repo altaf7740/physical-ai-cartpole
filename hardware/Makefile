@@ -10,7 +10,7 @@ CLI     := $(PYTHON) -u src/main.py --config $(CONFIG)
 UI_PORT ?= 8000
 
 .DEFAULT_GOAL := help
-.PHONY: help venv config test flash serial sensors dry-run run ui ui-start ui-stop ui-fake ui-remote pi-ui deploy ssh clean
+.PHONY: help venv config test flash serial sensors dry-run run ui ui-start ui-stop ui-fake ui-remote pi-ui deploy ssh mcp-token clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-9s %s\n", $$1, $$2}'
@@ -82,9 +82,16 @@ MPREMOTE  ?= $(HOME)/.local/bin/mpremote
 flash: ## Pi: copy src/pico_main.py to the Pico as main.py and restart it (stop the UI first)
 	$(MPREMOTE) connect $(PICO_PORT) fs cp src/pico_main.py :main.py + reset
 
-deploy: ## Mac: copy hardware/ to the Pi (keeps the Pi's config.toml, calibration, logs/ and venv)
-	rsync -av --delete --exclude .venv --exclude config.toml --exclude track_calibration.json --exclude 'logs/' \
-		--exclude __pycache__ --exclude .git ./ $(PI_HOST):$(PI_DIR)/
+deploy: ## Mac: copy hardware/ to the Pi (keeps the Pi's config.toml, calibration, MCP token, logs/ and venv)
+	rsync -av --delete --exclude .venv --exclude config.toml --exclude track_calibration.json --exclude /mcp_token --exclude '/mcp_tokens.*' --exclude 'logs/' \
+		--exclude __pycache__ --exclude .DS_Store --exclude .git ./ $(PI_HOST):$(PI_DIR)/
+
+NAME  ?= claude-code
+SCOPE ?= operate
+mcp-token: ## Mac: create an MCP access token on the Pi and print it (NAME=..., SCOPE=read|operate); or use the UI
+	@ssh $(PI_HOST) "curl -s -X POST localhost:$(UI_PORT)/api/command -H 'Content-Type: application/json' \
+		-d '{\"cmd\": \"mcp_create_token\", \"name\": \"$(NAME)\", \"scope\": \"$(SCOPE)\"}'" \
+		| python3 -c 'import json, sys; r = json.load(sys.stdin); print(r["token"]) if r.get("ok") else sys.exit("error: " + r.get("error", "?"))'
 
 ssh: ## Mac: open a shell in the project folder on the Pi
 	ssh -t $(PI_HOST) 'cd $(PI_DIR) && exec $$SHELL -l'

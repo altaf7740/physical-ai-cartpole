@@ -87,6 +87,17 @@ class UiConfig:
 
 
 @dataclass(frozen=True)
+class McpConfig:
+    # POST /mcp on the UI server, for AI agents (see mcp_server.py).
+    enabled: bool = True
+    tokens_file: str = "mcp_tokens.json"   # access tokens (hashed), made in the UI's AI agents dialog; not in git
+    require_confirmation: bool = False     # motion tools wait for the person to confirm via the MCP host
+    max_jog_s: float = 2.0                 # longest single jog an agent may ask for
+    allowed_origins: tuple[str, ...] = ()  # browser origins allowed to call /mcp (programs send none)
+    audit_file: str = "logs/mcp_audit.jsonl"
+
+
+@dataclass(frozen=True)
 class Config:
     serial: SerialConfig
     hardware: HardwareConfig
@@ -95,6 +106,7 @@ class Config:
     safety: SafetyConfig
     logging: LoggingConfig
     ui: UiConfig
+    mcp: McpConfig = McpConfig()
 
 
 _SECTIONS = {
@@ -105,6 +117,7 @@ _SECTIONS = {
     "safety": SafetyConfig,
     "logging": LoggingConfig,
     "ui": UiConfig,
+    "mcp": McpConfig,
 }
 
 
@@ -118,6 +131,8 @@ def _build_section(cls, raw: dict, name: str):
         values["obs_order"] = tuple(values["obs_order"])
     if "obs_scale" in values:
         values["obs_scale"] = tuple(float(v) for v in values["obs_scale"])
+    if "allowed_origins" in values:
+        values["allowed_origins"] = tuple(values["allowed_origins"])
     return cls(**values)
 
 
@@ -152,6 +167,8 @@ def _validate(cfg: Config) -> None:
         raise ConfigError("[ui] home_speed_mps must be > 0")
     if not 0 < cfg.ui.port < 65536 or cfg.ui.push_hz <= 0 or cfg.ui.jog_timeout_s <= 0:
         raise ConfigError("[ui] port must be 1-65535; push_hz and jog_timeout_s must be > 0")
+    if cfg.mcp.max_jog_s <= 0:
+        raise ConfigError("[mcp] max_jog_s must be > 0")
 
 
 def load_config(path: str | Path) -> Config:
@@ -175,6 +192,7 @@ def load_config(path: str | Path) -> Config:
         hardware=replace(cfg.hardware, calibration_file=str(base / cfg.hardware.calibration_file)),
         policy=replace(cfg.policy, model_path=str(base / cfg.policy.model_path)),
         logging=replace(cfg.logging, directory=str(base / cfg.logging.directory)),
+        mcp=replace(cfg.mcp, tokens_file=str(base / cfg.mcp.tokens_file), audit_file=str(base / cfg.mcp.audit_file)),
     )
     _validate(cfg)
     return cfg

@@ -51,3 +51,13 @@ push_hz = 20                 # browser update rate (samples are batched, none ar
 jog_timeout_s = 0.3          # jog stops unless the browser keeps repeating it (hold-to-move)
 home_on_connect = true       # home on the limit switches whenever the Pico connects (the cart MOVES on UI start)
 home_speed_mps = 0.08        # speed for that automatic homing
+
+[mcp]
+# POST /mcp on the UI server: lets an AI agent (Claude Code, ...) watch and drive the rig. See README "MCP".
+# Each token has its own scope: "read" (status, telemetry, emergency_stop) or "operate" (also home / jog / balance).
+enabled = true
+tokens_file = "mcp_tokens.json"  # access tokens, made in the UI (AI agents); hashed, mode 0600, not in git
+require_confirmation = false # true: tools that move the cart wait until the person confirms in the MCP host
+max_jog_s = 2.0              # longest single jog an agent may ask for
+allowed_origins = []         # browser origins allowed to call /mcp; MCP clients send none, so leave it empty
+audit_file = "logs/mcp_audit.jsonl"  # one JSON line per tool call

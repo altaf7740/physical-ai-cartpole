@@ -206,6 +206,69 @@
     .jog button { height: 44px; }
     .tabpanel { gap: 8px; }
   }
+  /* ---------- AI agents dialog (MCP access tokens + activity) ---------- */
+  .chip.agent { background: var(--primary-container); color: var(--on-primary-container); border-color: transparent; cursor: pointer; }
+  .chip.agent .dot { background: var(--primary); animation: blink 1s steps(2) infinite; }
+  dialog#agents { width: min(1040px, calc(100vw - 32px)); height: min(760px, calc(100vh - 32px)); max-width: none; max-height: none;
+    padding: 0; border: none; border-radius: 28px; background: var(--surface); color: var(--on-surface); box-shadow: var(--shadow-3);
+    overflow: hidden; }
+  dialog#agents[open] { display: flex; flex-direction: column; }
+  dialog#agents::backdrop { background: rgba(0,0,0,.32); }
+  .dlg-head { display: flex; align-items: center; gap: 12px; padding: 18px 16px 0 24px; flex: none; }
+  .dlg-head h2 { margin: 0; font-size: 22px; font-weight: 400; }
+  .dlg-head .sub { color: var(--muted); font-size: 13px; }
+  .dlg-head .close { margin-left: auto; width: 40px; padding: 0; background: transparent; color: var(--on-surface-variant); }
+  dialog#agents .tabs { margin: 8px 0 0; padding: 0 16px; }
+  dialog#agents .tab { flex: none; padding: 0 20px; }
+  .dlg-body { flex: 1 1 0; min-height: 0; overflow: auto; padding: 16px 24px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .dlg-body .card { overflow: visible; flex: none; }
+  .server-url { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .server-url code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--surface-low);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+  .form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.grow { flex: 1 1 200px; }
+  .field input, .field select, .toolbar input, .toolbar select { font: inherit; font-size: 14px; height: 40px; padding: 0 12px; border-radius: 8px;
+    border: 1px solid var(--outline); background: var(--surface-card); color: var(--on-surface); min-width: 0; }
+  .field input:focus, .field select:focus, .toolbar input:focus, .toolbar select:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
+  .reveal { background: var(--tertiary-container); color: var(--on-tertiary-container); border-radius: 16px; padding: 12px 16px;
+    display: flex; flex-direction: column; gap: 8px; }
+  .reveal .server-url code { background: rgba(255,255,255,.7); }
+  .reveal b { font-weight: 500; }
+  .table-wrap { overflow-x: auto; min-width: 0; }
+  table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.grid th { text-align: left; font-weight: 500; color: var(--on-surface-variant); font-size: 12px; padding: 6px 10px;
+    border-bottom: 1px solid var(--outline-variant); white-space: nowrap; position: sticky; top: 0; background: var(--surface-card); }
+  table.grid td { padding: 8px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  table.grid tr:last-child td { border-bottom: none; }
+  table.grid td.args { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--on-surface-variant); }
+  table.grid td.num { text-align: right; white-space: nowrap; }
+  table.grid .muted { color: var(--muted); }
+  table.grid button { height: 32px; padding: 0 12px; font-size: 13px; }
+  .empty { color: var(--muted); text-align: center; padding: 28px 8px; font-size: 13px; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px;
+    font-weight: 500; white-space: nowrap; background: var(--surface-high); color: var(--on-surface-variant); }
+  .tag.read { background: var(--secondary-container); color: var(--on-secondary-container); }
+  .tag.operate, .tag.moves { background: var(--warn-container); color: var(--on-warn-container); }
+  .tag.done { background: var(--tertiary-container); color: var(--on-tertiary-container); }
+  .tag.asked { background: var(--primary-container); color: var(--on-primary-container); }
+  .tag.declined { background: var(--surface-highest); color: var(--on-surface); }
+  .tag.refused, .tag.expired { background: var(--error-container); color: var(--on-error-container); }
+  .tag svg.i { width: 14px; height: 14px; }
+  .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tools ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .tools li { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 10px; border-radius: 8px;
+    background: var(--surface-low); }
+  .tools li svg.i { width: 14px; height: 14px; color: var(--warn); }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex: none; }
+  .toolbar input { flex: 1 1 160px; }
+  .toolbar .live-note { margin-left: auto; font-size: 12px; color: var(--muted); }
+  @media (max-width: 759px) {
+    dialog#agents { width: 100vw; height: 100vh; border-radius: 0; }
+    .dlg-body { padding: 12px; }
+    .tools { grid-template-columns: 1fr; }
+    table.grid .hide-narrow { display: none; }
+  }
 </style>
 </head>
 <body data-view="live">
@@ -226,6 +289,12 @@
   <symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></symbol>
   <symbol id="i-lift" viewBox="0 0 24 24"><path d="M4 12l1.4 1.4L11 7.8V20h2V7.8l5.6 5.6L20 12l-8-8z"/></symbol>
   <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3.5 18.5 9.5 12.5l4 4L22 6.9 20.6 5.5l-7.1 8-4-4L2 17z"/></symbol>
+  <symbol id="i-agent" viewBox="0 0 24 24"><path d="M11 2h2v2.1A7 7 0 0 1 19 11v6a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-6a7 7 0 0 1 6-6.9zm-2 9a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM2 12h2v4H2zm18 0h2v4h-2z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></symbol>
+  <symbol id="i-add" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M17.7 6.3A8 8 0 1 0 19.7 14h-2.1a6 6 0 1 1-1.4-6.2L13 11h7V4z"/></symbol>
+  <symbol id="i-move" viewBox="0 0 24 24"><path d="M3 12l4-4v3h10V8l4 4-4 4v-3H7v3z"/></symbol>
   <symbol id="i-tune" viewBox="0 0 24 24"><path d="M3 17v2h6v-2zM3 5v2h10V5zm10 16v-2h8v-2h-8v-2h-2v6zM7 9v2H3v2h4v2h2V9zm14 4v-2H11v2zm-6-4h2V7h4V5h-4V3h-2z"/></symbol>
 </svg>
 
@@ -237,10 +306,12 @@
     <span class="chip" id="safety-pill" hidden></span>
     <span class="chip mono" id="rate-pill">— Hz</span>
     <span class="chip rec" id="rec-pill" hidden><span class="dot"></span>REC</span>
+    <span class="chip agent" id="agent-pill" hidden title="An AI agent is using the rig over MCP. Click for its activity."><span class="dot"></span><span>Agent</span></span>
   </div>
   <div class="bar-actions">
     <button id="btn-connect" class="text hide-sm" title="Connect to the Pico"><svg class="i"><use href="#i-link"/></svg>Connect</button>
     <button id="btn-disconnect" class="text hide-sm" title="Disconnect from the Pico (motor to 0)"><svg class="i"><use href="#i-unlink"/></svg>Disconnect</button>
+    <button id="btn-agents" class="text" title="AI agents: MCP access tokens and what agents did"><svg class="i"><use href="#i-agent"/></svg><span class="hide-sm">AI agents</span></button>
     <button id="estop" title="E-STOP: motor to 0, policy and homing stopped (Space or Esc)"><svg class="i"><use href="#i-stop"/></svg>E-STOP</button>
   </div>
 </header>
@@ -339,6 +410,9 @@
           <button id="btn-connect-2" class="outlined"><svg class="i"><use href="#i-link"/></svg>Connect</button>
           <button id="btn-disconnect-2" class="outlined"><svg class="i"><use href="#i-unlink"/></svg>Disconnect</button>
         </div>
+        <div class="divider"></div>
+        <div class="label">AI agents (MCP)</div>
+        <div class="row"><button id="btn-agents-2" class="outlined"><svg class="i"><use href="#i-agent"/></svg>Access tokens &amp; activity</button></div>
         <div id="sim-card" hidden style="display:flex;flex-direction:column;gap:8px">
           <div class="divider"></div>
           <div class="label">Simulator (--fake, no hardware)</div>
@@ -354,6 +428,80 @@
   <button data-view="charts" aria-selected="false"><svg><use href="#i-chart"/></svg>Charts</button>
   <button data-view="controls" aria-selected="false"><svg><use href="#i-tune"/></svg>Control</button>
 </nav>
+<dialog id="agents" aria-labelledby="agents-title">
+  <div class="dlg-head">
+    <h2 id="agents-title">AI agents</h2>
+    <span class="sub hide-sm">MCP server: let an agent such as Claude Code watch and drive the rig</span>
+    <button class="close" id="agents-close" title="Close" aria-label="Close"><svg class="i"><use href="#i-close"/></svg></button>
+  </div>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-atab="tokens" aria-selected="true">Access tokens</button>
+    <button class="tab" role="tab" data-atab="activity" aria-selected="false">Activity</button>
+  </div>
+
+  <div class="dlg-body" data-apanel="tokens">
+    <div class="card">
+      <div class="card-title">Server</div>
+      <div class="server-url"><code class="mono" id="mcp-url">—</code>
+        <button class="outlined" data-copy="mcp-url"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>
+      <p class="hint" id="mcp-confirm" style="margin-top:8px"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">New token</div>
+      <div class="form">
+        <label class="field grow"><span class="label">Name</span><input id="tok-name" maxlength="60" placeholder="e.g. claude-code on my Mac" autocomplete="off"></label>
+        <label class="field"><span class="label">Access</span>
+          <select id="tok-scope"><option value="read">Read only</option><option value="operate" selected>Read and move</option></select></label>
+        <label class="field"><span class="label">Expires</span>
+          <select id="tok-exp"><option value="">Never</option><option value="7">In 7 days</option><option value="30">In 30 days</option>
+            <option value="90" selected>In 90 days</option><option value="365">In a year</option></select></label>
+        <button class="filled" id="tok-create"><svg class="i"><use href="#i-add"/></svg>Create token</button>
+      </div>
+      <p class="hint" id="tok-scope-hint" style="margin-top:8px"></p>
+      <div class="reveal" id="tok-reveal" hidden style="margin-top:12px">
+        <div><b>Copy this token now.</b> Only its hash is kept, so it can't be shown again.</div>
+        <div class="server-url"><code class="mono" id="tok-value"></code>
+          <button class="outlined" data-copy="tok-value"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>
+        <div>Add it to Claude Code:</div>
+        <div class="server-url"><code class="mono" id="tok-cmd"></code>
+          <button class="outlined" data-copy="tok-cmd"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Tokens<span class="sub" id="tok-count"></span></div>
+      <div class="table-wrap"><table class="grid"><thead><tr><th>Token</th><th>Access</th><th class="hide-narrow">Created</th><th>Last used</th>
+        <th class="hide-narrow">Expires</th><th></th></tr></thead><tbody id="tok-rows"></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">What an agent can do</div>
+      <div class="tools">
+        <div><span class="tag read">Read only</span><ul id="tools-read"></ul></div>
+        <div><span class="tag operate">Read and move adds</span><ul id="tools-operate"></ul></div>
+      </div>
+      <p class="hint" style="margin-top:10px"><svg class="i" style="width:14px;height:14px;vertical-align:-2px;color:var(--warn)"><use href="#i-move"/></svg>
+        moves the cart. Every token can call emergency_stop. The E-STOP here also stops anything an agent started.</p>
+    </div>
+  </div>
+
+  <div class="dlg-body" data-apanel="activity" hidden>
+    <div class="toolbar">
+      <select id="act-result" aria-label="Result"><option value="">Any result</option><option value="done">Done</option>
+        <option value="asked">Asked you first</option><option value="declined">Declined by you</option><option value="refused">Refused</option></select>
+      <select id="act-tool" aria-label="Action"><option value="">Any action</option></select>
+      <select id="act-token" aria-label="Token"><option value="">Any token</option></select>
+      <input id="act-search" placeholder="Search calls" autocomplete="off">
+      <span class="live-note" id="act-note"></span>
+      <button class="text" id="act-refresh" title="Refresh"><svg class="i"><use href="#i-refresh"/></svg></button>
+    </div>
+    <div class="card" style="padding:4px 6px">
+      <div class="table-wrap"><table class="grid"><thead><tr><th>When</th><th>Action</th><th class="hide-narrow">Arguments</th><th>Token</th><th>Result</th>
+        <th class="hide-narrow num">Took</th></tr></thead><tbody id="act-rows"></tbody></table></div>
+    </div>
+  </div>
+</dialog>
 <div id="toast"></div>
 
 <script>
@@ -697,8 +845,10 @@ for (const [id, dir] of [["jog-neg", -1], ["jog-pos", 1]]) {
   for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) b.addEventListener(ev, jogStop);
 }
 window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" || (e.key === " " && e.target.tagName !== "INPUT")) { e.preventDefault(); estop(); return; }
-  if (e.target.tagName === "INPUT") return;
+  // Esc always stops the rig (and, in the AI agents dialog, also closes it).
+  if (e.key === "Escape" || (e.key === " " && !["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName))) {
+    e.preventDefault(); estop(); if ($("agents").open) $("agents").close(); return; }
+  if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName) || $("agents").open) return;
   if (e.key === "ArrowLeft" && !e.repeat) { e.preventDefault(); jogStart(-1); }
   if (e.key === "ArrowRight" && !e.repeat) { e.preventDefault(); jogStart(1); }
 });
@@ -727,6 +877,164 @@ $("speed").oninput = () => {
   $("speed-text").textContent = `${v.toFixed(3)} m/s · ${Math.round(v * (info ? info.max_step_rate / info.max_velocity : 0))} st/s`;
 };
 
+
+// ---------- AI agents (MCP) ----------
+const RESULT = { done: "Done", asked: "Asked you first", declined: "Declined by you", refused: "Refused" };
+const SCOPE = { read: "Read only", operate: "Read and move" };
+const SCOPE_HINT = { read: "Status, telemetry and emergency stop. It can't move the cart.",
+  operate: "Also home, jog, calibrate and run the policy with the motor on." };
+let mcpInfo = null, activity = [], actTimer = null;
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const toolTitle = (name) => (mcpInfo && mcpInfo.tools.find((t) => t.name === name) || {}).title || name;
+
+function ago(t) {
+  if (!t) return "never";
+  const s = Date.now() / 1000 - t;
+  if (s < 0) return "in " + until(t);
+  if (s < 60) return `${Math.max(1, Math.round(s))} s ago`;
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} d ago`;
+}
+function until(t) {
+  const s = t - Date.now() / 1000;
+  if (s <= 0) return "expired";
+  return s < 86400 ? `${Math.ceil(s / 3600)} h` : `${Math.ceil(s / 86400)} d`;
+}
+const stamp = (t) => t ? new Date(t * 1000).toLocaleString() : "";
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {  // plain http (not localhost) has no clipboard API
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    $("agents").appendChild(ta); ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    if (!ok) { toast("Copy failed: select the text and copy it", "err"); return; }
+  }
+  toast("Copied");
+}
+
+async function loadMcp() {
+  try { mcpInfo = await (await fetch("/api/mcp")).json(); } catch { toast("UI server unreachable", "err"); return; }
+  if (!mcpInfo.enabled) {
+    $("mcp-url").textContent = "MCP is off: set [mcp] enabled = true in config.toml";
+    for (const id of ["tok-create", "tok-name"]) $(id).disabled = true;
+    return;
+  }
+  $("mcp-url").textContent = `${location.protocol}//${location.host}/mcp`;
+  $("mcp-confirm").textContent = mcpInfo.require_confirmation
+    ? "Confirmation is on: tools that move the cart wait until you approve that exact call in the agent's app."
+    : "Confirmation is off ([mcp] require_confirmation): moving tools run when called. Claude Code still asks you before each tool call unless you've allowed it.";
+  const rows = mcpInfo.tokens;
+  $("tok-count").textContent = rows.length ? `${rows.length}` : "";
+  $("tok-rows").innerHTML = rows.length ? rows.map((t) => `<tr>
+      <td><div>${esc(t.name)}</div><div class="mono muted">${esc(t.prefix)}…</div></td>
+      <td><span class="tag ${t.scope}">${SCOPE[t.scope] || esc(t.scope)}</span></td>
+      <td class="hide-narrow" title="${stamp(t.created_at)}">${ago(t.created_at)}</td>
+      <td title="${stamp(t.last_used_at)}" style="white-space:nowrap">${ago(t.last_used_at)}</td>
+      <td class="hide-narrow">${t.expired ? '<span class="tag expired">Expired</span>' : t.expires_at ? `<span title="${stamp(t.expires_at)}">in ${until(t.expires_at)}</span>` : "Never"}</td>
+      <td class="num"><button class="danger-tonal" data-revoke="${esc(t.id)}" data-name="${esc(t.name)}">Revoke</button></td></tr>`).join("")
+    : `<tr><td colspan="6" class="empty">No tokens yet. Create one above, then give it to your agent.</td></tr>`;
+  const li = (t) => `<li title="${esc(t.name)}">${t.moves ? '<svg class="i"><use href="#i-move"/></svg>' : ""}${esc(t.title)}</li>`;
+  $("tools-read").innerHTML = mcpInfo.tools.filter((t) => t.scope === "read").map(li).join("");
+  $("tools-operate").innerHTML = mcpInfo.tools.filter((t) => t.scope === "operate").map(li).join("");
+  const tools = $("act-tool"), keep = tools.value;
+  tools.innerHTML = '<option value="">Any action</option>' + mcpInfo.tools.map((t) => `<option value="${esc(t.name)}">${esc(t.title)}</option>`).join("");
+  tools.value = keep;
+}
+
+async function loadActivity() {
+  try { activity = (await (await fetch("/api/mcp/activity")).json()).entries; } catch { return; }
+  const tokens = $("act-token"), keep = tokens.value;
+  const names = [...new Set(activity.map((e) => e.token))].sort();
+  tokens.innerHTML = '<option value="">Any token</option>' + names.map((n) => `<option>${esc(n)}</option>`).join("");
+  tokens.value = names.includes(keep) ? keep : "";
+  renderActivity();
+}
+
+function renderActivity() {
+  const result = $("act-result").value, tool = $("act-tool").value, token = $("act-token").value;
+  const q = $("act-search").value.trim().toLowerCase();
+  const rows = activity.filter((e) => (!result || e.result === result) && (!tool || e.tool === tool) && (!token || e.token === token)
+    && (!q || JSON.stringify(e).toLowerCase().includes(q) || toolTitle(e.tool).toLowerCase().includes(q)));
+  $("act-note").textContent = `${rows.length} of ${activity.length} calls · updates live`;
+  $("act-rows").innerHTML = rows.length ? rows.map((e) => {
+    const args = Object.keys(e.arguments || {}).length ? JSON.stringify(e.arguments) : "";
+    const why = e.error ? ` title="${esc(e.error)}"` : "";
+    return `<tr>
+      <td title="${stamp(e.at)}" style="white-space:nowrap">${ago(e.at)}</td>
+      <td>${esc(toolTitle(e.tool))}<div class="mono muted" style="font-size:11px">${esc(e.tool)}</div></td>
+      <td class="args mono hide-narrow" title="${esc(args)}">${esc(args) || '<span class="muted">—</span>'}</td>
+      <td>${esc(e.token)}</td>
+      <td><span class="tag ${esc(e.result)}"${why}>${RESULT[e.result] || esc(e.result)}</span>
+        ${e.error && e.result === "refused" ? `<div class="muted" style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"${why}>${esc(e.error)}</div>` : ""}</td>
+      <td class="num mono hide-narrow">${e.result === "done" || e.result === "refused" ? `${e.duration_ms} ms` : ""}</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty">${activity.length ? "No calls match these filters." : "No agent has called a tool yet."}</td></tr>`;
+}
+
+function selectAgentsTab(name) {
+  for (const t of document.querySelectorAll("[data-atab]")) t.setAttribute("aria-selected", t.dataset.atab === name);
+  for (const p of document.querySelectorAll("[data-apanel]")) p.hidden = p.dataset.apanel !== name;
+  clearInterval(actTimer);
+  if (name === "activity") { loadActivity(); actTimer = setInterval(loadActivity, 2000); }
+}
+
+function openAgents(tab = "tokens") {
+  jogStop();
+  const d = $("agents");
+  if (!d.open) d.showModal();
+  loadMcp();
+  selectAgentsTab(tab);
+}
+
+$("btn-agents").onclick = $("btn-agents-2").onclick = () => openAgents("tokens");
+$("agent-pill").onclick = () => openAgents("activity");
+$("agents-close").onclick = () => $("agents").close();
+$("agents").addEventListener("close", () => { clearInterval(actTimer); $("tok-reveal").hidden = true; $("tok-value").textContent = ""; });
+$("agents").addEventListener("click", (e) => { if (e.target === $("agents")) $("agents").close(); });  // backdrop
+for (const t of document.querySelectorAll("[data-atab]")) t.onclick = () => selectAgentsTab(t.dataset.atab);
+for (const id of ["act-result", "act-tool", "act-token"]) $(id).onchange = renderActivity;
+$("act-search").oninput = renderActivity;
+$("act-refresh").onclick = loadActivity;
+$("tok-scope").onchange = () => { $("tok-scope-hint").textContent = SCOPE_HINT[$("tok-scope").value]; };
+$("tok-scope").onchange();
+$("tok-name").addEventListener("keydown", (e) => { if (e.key === "Enter") $("tok-create").click(); });
+$("agents").addEventListener("click", (e) => {
+  const copy = e.target.closest("[data-copy]");
+  if (copy) copyText($(copy.dataset.copy).textContent);
+  const revoke = e.target.closest("[data-revoke]");
+  if (revoke && confirm(`Revoke "${revoke.dataset.name}"? Agents using it lose access at once.`))
+    api("mcp_revoke_token", { id: revoke.dataset.revoke }).then((r) => { if (r.ok) { toast("Token revoked"); loadMcp(); } });
+});
+$("tok-create").onclick = async () => {
+  const name = $("tok-name").value.trim();
+  if (!name) { $("tok-name").focus(); toast("Give the token a name", "err"); return; }
+  const r = await api("mcp_create_token", { name, scope: $("tok-scope").value, expires_in_days: $("tok-exp").value || null });
+  if (!r.ok) return;
+  $("tok-value").textContent = r.token;
+  $("tok-cmd").textContent = `claude mcp add --transport http cartpole ${location.protocol}//${location.host}/mcp --header "Authorization: Bearer ${r.token}"`;
+  $("tok-reveal").hidden = false;
+  $("tok-name").value = "";
+  loadMcp();
+};
+
+function renderAgentPill() {
+  const a = status && status.agent;
+  const fresh = a && Date.now() / 1000 - a.at < 15;
+  $("agent-pill").hidden = !fresh;
+  if (fresh) setPill("agent-pill", `Agent · ${toolTitle(a.tool)}`, "agent");
+}
+setInterval(renderAgentPill, 1000);
+
+// Deep links: /#agents opens the dialog on its tokens, /#agents/activity on the activity.
+function openFromHash() {
+  if (location.hash.startsWith("#agents")) openAgents(location.hash === "#agents/activity" ? "activity" : "tokens");
+}
+window.addEventListener("hashchange", openFromHash);
+
 // ---------- boot ----------
 (async function boot() {
   try {
@@ -752,6 +1060,8 @@ $("speed").oninput = () => {
     <dt>rate</dt><dd>${info.rate_hz} Hz</dd>
     <dt>max speed</dt><dd>${info.max_velocity.toFixed(3)} m/s</dd>`;
   openStream();
+  loadMcp();
+  openFromHash();
   requestAnimationFrame(frame);
 })();
 </script>
